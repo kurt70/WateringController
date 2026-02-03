@@ -1,4 +1,4 @@
-# MQTT Contract – Veranda Watering System
+# MQTT Contract – Watering Controller
 
 This document defines all MQTT topics and payload contracts used by the system.
 
@@ -23,8 +23,8 @@ The backend is the sole authority for scheduling and safety decisions.
 
 ## Topic Naming Convention
 
-veranda/<component>/<type>
-
+<config_prefix>/WateringController/<component>/<type>
+- `config_prefix` is configurable via `Mqtt:TopicPrefix` (defaults to `WateringController`)
 - `<component>`: `pump` | `waterlevel` | `system`
 - `<type>`: `cmd` | `state` | `alarm`
 
@@ -45,7 +45,7 @@ veranda/<component>/<type>
 
 ## 4. Command Topics
 
-### 4.1 `veranda/pump/cmd`
+### 4.1 `<config_prefix>/WateringController/pump/cmd`
 
 #### Purpose
 Command the pump controller to run the pump for a fixed duration.
@@ -62,6 +62,7 @@ Command the pump controller to run the pump for a fixed duration.
 #### Payload Schema
 ```json
 {
+  "action": "start",
   "runSeconds": 30,
   "requestId": "uuid",
   "reason": "schedule",
@@ -71,14 +72,25 @@ Command the pump controller to run the pump for a fixed duration.
 #### Field Definitions
 | Field	| Type | Required | Description |
 |-------|------|----------|-------------|
-| runSeconds | int | yes | Pump | runtime in seconds |
+| action | string | yes | "start" or "stop" (defaults to "start" for backward compatibility) |
+| runSeconds | int | conditional | Required for action="start" (seconds); ignored for action="stop" |
 | requestId	| string (UUID)| yes | Correlation id |
 | reason | string | yes | schedule | manual | test|
 | issuedAt | string (UTC) | yes | When backend issued command|
 
+#### Manual Stop Command
+```json
+{
+  "action": "stop",
+  "requestId": "uuid",
+  "reason": "manual_stop",
+  "issuedAt": "2026-01-15T07:00:00Z"
+}
+```
+
 ## 5. Device State Topics
 
-### 5.1 `veranda/pump/state`
+### 5.1 `<config_prefix>/WateringController/pump/state`
 
 #### Purpose
 Report current and last-known pump state.
@@ -112,7 +124,7 @@ Report current and last-known pump state.
 | lastRequestId | string  | optional | Correlates to last cmd |
 | reportedAt | string | yes | Time (UTC) state was reported |
 
-### 5.2 `veranda/waterlevel/state`
+### 5.2 `<config_prefix>/WateringController/waterlevel/state`
 
 #### Purpose
 Report water level derived from induction sensors.
@@ -147,7 +159,7 @@ Report water level derived from induction sensors.
 
 ## 6. Backend State Topics
 
-### 6.1 `veranda/system/state`
+### 6.1 `<config_prefix>/WateringController/system/state`
 
 #### Purpose
 Expose aggregated system state to UI and Home Assistant.
@@ -175,7 +187,7 @@ Expose aggregated system state to UI and Home Assistant.
 
 ## 8. Alarm Topics
 
-### 8.1 `veranda/system/alarm`
+### 8.1 `<config_prefix>/WateringController/system/alarm`
 
 #### Purpose
 Emit safety or system alarms.
@@ -188,7 +200,7 @@ Emit safety or system alarms.
 - Home Assistant
 
 #### Retained
-- No
+- yes
 
 #### Payload Schema
 ```json
@@ -208,6 +220,10 @@ Emit safety or system alarms.
 | LEVEL_UNKNOWN | No recent level data |
 | MQTT_DISCONNECTED | Broker connection lost |
 | SCHEDULER_ERROR | Backend scheduling failure |
+
+
+
+
 
 
 

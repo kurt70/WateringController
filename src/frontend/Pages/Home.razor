@@ -1,0 +1,361 @@
+@page "/"
+@implements IAsyncDisposable
+@inject WateringHubClient HubClient
+@inject HttpClient Http
+
+<PageTitle>Status</PageTitle>
+
+<h1>Status</h1>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h5>Connections</h5>
+            <div class="status-grid">
+                <div class="status-item">
+                    <span>SignalR</span>
+                    @{
+                        var signalrStatus = HubClient.IsConnected ? "connected" : "disconnected";
+                    }
+                    <div class="status-right">
+                        <span class="status-icon @GetStatusClass(signalrStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(signalrStatus)">
+                            @signalrStatus
+                        </span>
+                        <span class="status-time">@GetLastSeenText(_lastSignalrChange)</span>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <span>MQTT Broker</span>
+                    @{
+                        var mqttStatus = GetMqttStatusText();
+                    }
+                    <div class="status-right">
+                        <span class="status-icon @GetStatusClass(mqttStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(mqttStatus)">
+                            @mqttStatus
+                        </span>
+                        <span class="status-time">@GetLastSeenText(_health?.Mqtt?.LastConnectedAt)</span>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <span>Pump Controller</span>
+                    @{
+                        var pumpStatus = GetDeviceStatusText(_pumpState?.ReceivedAt);
+                    }
+                    <div class="status-right">
+                        <span class="status-icon @GetStatusClass(pumpStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(pumpStatus)">
+                            @pumpStatus
+                        </span>
+                        <span class="status-time">@GetLastSeenText(_pumpState?.ReceivedAt)</span>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <span>Water Level Controller</span>
+                    @{
+                        var waterStatus = GetDeviceStatusText(_latest?.ReceivedAt);
+                    }
+                    <div class="status-right">
+                        <span class="status-icon @GetStatusClass(waterStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(waterStatus)">
+                            @waterStatus
+                        </span>
+                        <span class="status-time">@GetLastSeenText(_latest?.ReceivedAt)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="text-muted small mt-2">
+                Device status uses latest received MQTT message timestamps.
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h5>Water Level</h5>
+            @if (_latest is null)
+            {
+                <p>No water level updates yet.</p>
+            }
+            else
+            {
+                <div class="water-level">
+                    <div class="water-tank">
+                        <div class="water-fill" style="height:@_latest.LevelPercent%"></div>
+                        <div class="water-label">@_latest.LevelPercent%</div>
+                    </div>
+                    <div class="water-meta">
+                        <div><strong>Sensors:</strong> @string.Join(", ", _latest.Sensors.Select(value => value ? "1" : "0"))</div>
+                        <div><strong>Measured:</strong> @_latest.MeasuredAt.ToString("u")</div>
+                        <div><strong>Reported:</strong> @_latest.ReportedAt.ToString("u")</div>
+                        <div><strong>Received:</strong> @_latest.ReceivedAt.ToString("u")</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h5>Pump State</h5>
+            @if (_pumpState is null)
+            {
+                <p>No pump state updates yet.</p>
+            }
+            else
+            {
+                <div><strong>Running:</strong> @(_pumpState.Running ? "yes" : "no")</div>
+                <div><strong>Since:</strong> @_pumpState.Since?.ToString("u")</div>
+                <div><strong>Last run seconds:</strong> @_pumpState.LastRunSeconds</div>
+                <div><strong>Last request id:</strong> @_pumpState.LastRequestId</div>
+                <div><strong>Reported:</strong> @_pumpState.ReportedAt.ToString("u")</div>
+                <div><strong>Received:</strong> @_pumpState.ReceivedAt.ToString("u")</div>
+            }
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h5>Alarms</h5>
+            @if (_alarms.Count == 0)
+            {
+                <p>No alarms.</p>
+            }
+            else
+            {
+                <ul class="list-group">
+                    @foreach (var alarm in _alarms)
+                    {
+                        <li class="list-group-item">
+                            <strong>@alarm.Type</strong> (@alarm.Severity) - @alarm.Message
+                            <div class="text-muted small">@alarm.RaisedAt.ToString("u")</div>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-3 h-100">
+            <h5>Scheduling</h5>
+            @if (_lastRun is null)
+            {
+                <p>No scheduled runs yet.</p>
+            }
+            else
+            {
+                <div><strong>Last scheduled run:</strong> @_lastRun.RequestedAtUtc.ToLocalTime().ToString("u")</div>
+                <div><strong>Duration:</strong> @_lastRun.RunSeconds s</div>
+                <div><strong>Allowed:</strong> @(_lastRun.Allowed ? "yes" : "no")</div>
+                <div><strong>Reason:</strong> @_lastRun.Reason</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private WaterLevelUpdate? _latest;
+    private PumpStateUpdate? _pumpState;
+    private RunHistoryEntry? _lastRun;
+    private List<SystemAlarmUpdate> _alarms = new();
+    private HealthStatus? _health;
+    private CancellationTokenSource? _pollingCts;
+    private DateTimeOffset? _lastSignalrChange;
+    private static readonly TimeSpan DeviceStaleThreshold = TimeSpan.FromMinutes(2);
+
+    protected override async Task OnInitializedAsync()
+    {
+        HubClient.WaterLevelUpdated += HandleWaterLevelUpdated;
+        HubClient.PumpStateUpdated += HandlePumpStateUpdated;
+        HubClient.AlarmRaised += HandleAlarmRaised;
+        HubClient.ConnectionStateChanged += HandleConnectionStateChanged;
+        _lastSignalrChange = DateTimeOffset.UtcNow;
+        await HubClient.StartAsync();
+
+        await LoadInitialStateAsync();
+        StartPolling();
+    }
+
+    private void HandleConnectionStateChanged(bool isConnected)
+    {
+        _lastSignalrChange = DateTimeOffset.UtcNow;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleWaterLevelUpdated(WaterLevelUpdate update)
+    {
+        _latest = update;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void HandlePumpStateUpdated(PumpStateUpdate update)
+    {
+        _pumpState = update;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleAlarmRaised(SystemAlarmUpdate update)
+    {
+        _alarms.Insert(0, update);
+        if (_alarms.Count > 50)
+        {
+            _alarms.RemoveAt(_alarms.Count - 1);
+        }
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadInitialStateAsync()
+    {
+        try
+        {
+            var healthResponse = await Http.GetAsync("/health");
+            if (healthResponse.IsSuccessStatusCode)
+            {
+                _health = await healthResponse.Content.ReadFromJsonAsync<HealthStatus>();
+            }
+
+            var waterResponse = await Http.GetAsync("/api/waterlevel/latest");
+            if (waterResponse.IsSuccessStatusCode)
+            {
+                _latest = await waterResponse.Content.ReadFromJsonAsync<WaterLevelUpdate>();
+            }
+
+            var pumpResponse = await Http.GetAsync("/api/pump/latest");
+            if (pumpResponse.IsSuccessStatusCode)
+            {
+                _pumpState = await pumpResponse.Content.ReadFromJsonAsync<PumpStateUpdate>();
+            }
+
+            var alarmsResponse = await Http.GetAsync("/api/alarms/recent");
+            if (alarmsResponse.IsSuccessStatusCode)
+            {
+                var alarms = await alarmsResponse.Content.ReadFromJsonAsync<List<SystemAlarmUpdate>>();
+                if (alarms is not null)
+                {
+                    _alarms = alarms;
+                }
+            }
+
+            var historyResponse = await Http.GetAsync("/api/history/recent?limit=1");
+            if (historyResponse.IsSuccessStatusCode)
+            {
+                var history = await historyResponse.Content.ReadFromJsonAsync<List<RunHistoryEntry>>();
+                _lastRun = history?.FirstOrDefault();
+            }
+        }
+        catch
+        {
+            // Ignore initial load errors in UI.
+        }
+    }
+
+    private static string GetDeviceStatusText(DateTimeOffset? receivedAt)
+    {
+        if (!receivedAt.HasValue)
+        {
+            return "unknown";
+        }
+
+        return IsFresh(receivedAt) ? "online" : "stale";
+    }
+
+    private string GetMqttStatusText()
+    {
+        if (_health?.Mqtt is null)
+        {
+            return "unknown";
+        }
+
+        return _health.Mqtt.Connected ? "connected" : "disconnected";
+    }
+
+    private static bool IsFresh(DateTimeOffset? receivedAt)
+    {
+        if (!receivedAt.HasValue)
+        {
+            return false;
+        }
+
+        return DateTimeOffset.UtcNow - receivedAt.Value <= DeviceStaleThreshold;
+    }
+
+    private static string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "connected" => "status-chip ok",
+            "online" => "status-chip ok",
+            "stale" => "status-chip warn",
+            "disconnected" => "status-chip bad",
+            _ => "status-chip unknown"
+        };
+    }
+
+    private static string GetLastSeenText(DateTimeOffset? when)
+    {
+        if (!when.HasValue)
+        {
+            return "never";
+        }
+
+        var age = DateTimeOffset.UtcNow - when.Value;
+        if (age < TimeSpan.FromSeconds(5))
+        {
+            return "just now";
+        }
+
+        if (age < TimeSpan.FromMinutes(1))
+        {
+            return $"{age.Seconds}s ago";
+        }
+
+        if (age < TimeSpan.FromHours(1))
+        {
+            return $"{age.Minutes}m ago";
+        }
+
+        if (age < TimeSpan.FromDays(1))
+        {
+            return $"{age.Hours}h ago";
+        }
+
+        return $"{age.Days}d ago";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        HubClient.WaterLevelUpdated -= HandleWaterLevelUpdated;
+        HubClient.PumpStateUpdated -= HandlePumpStateUpdated;
+        HubClient.AlarmRaised -= HandleAlarmRaised;
+        HubClient.ConnectionStateChanged -= HandleConnectionStateChanged;
+        _pollingCts?.Cancel();
+        await HubClient.StopAsync();
+    }
+
+    private void StartPolling()
+    {
+        _pollingCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollingCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken token)
+    {
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                await LoadInitialStateAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            timer.Dispose();
+        }
+    }
+}

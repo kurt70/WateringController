@@ -26,6 +26,11 @@ bld/
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
+src/backend/wwwroot/
+src/frontend/bin/
+src/frontend/obj/
+src/backend.tests/coverage/
+src/backend.tests/coverage*.xml
 
 # MSTest test Results
 [Tt]est[Rr]esult*/

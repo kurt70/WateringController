@@ -1,0 +1,288 @@
+@page "/test"
+@inject HttpClient Http
+
+<PageTitle>Test MQTT</PageTitle>
+
+<h1>Test MQTT Messages</h1>
+
+<p class="text-muted">Publishes test messages to the MQTT broker (development only).</p>
+
+<div class="card p-3 mb-3">
+    <h5>Water Level State</h5>
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label">Level %</label>
+            <input class="form-control" type="number" min="0" max="100" @bind="_waterLevelPercent" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Sensors (bottom → top)</label>
+            <div class="d-flex gap-2">
+                @for (var i = 0; i < _waterSensors.Length; i++)
+                {
+                    var index = i;
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               checked="@_waterSensors[index]"
+                               @onchange="e => OnSensorChanged(index, e)" />
+                        <label class="form-check-label">S@index</label>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-outline-primary w-100" @onclick="SendWaterLevelAsync">Send</button>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-3">
+    <h5>Pump State</h5>
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label">Running</label>
+            <InputSelect class="form-select" @bind-Value="_pumpRunning" TValue="bool">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </InputSelect>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Last run seconds</label>
+            <input class="form-control" type="number" min="0" @bind="_pumpLastRunSeconds" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Last request id</label>
+            <input class="form-control" @bind="_pumpLastRequestId" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-outline-primary w-100" @onclick="SendPumpStateAsync">Send</button>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-3">
+    <h5>System Alarm</h5>
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label">Type</label>
+            <input class="form-control" @bind="_alarmType" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Severity</label>
+            <input class="form-control" @bind="_alarmSeverity" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Message</label>
+            <input class="form-control" @bind="_alarmMessage" />
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-outline-primary w-100" @onclick="SendAlarmAsync">Send</button>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-3">
+    <h5>System State</h5>
+    <div class="row g-2">
+        <div class="col-md-2">
+            <label class="form-label">Pump running</label>
+            <InputSelect class="form-select" @bind-Value="_systemPumpRunning" TValue="bool">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </InputSelect>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Water level %</label>
+            <input class="form-control" type="number" min="0" max="100" @bind="_systemWaterLevelPercent" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Safe to run</label>
+            <InputSelect class="form-select" @bind-Value="_systemSafeToRun" TValue="bool">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </InputSelect>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Next scheduled run (UTC)</label>
+            <input class="form-control" @bind="_systemNextScheduledRun" placeholder="2026-01-16T07:00:00Z" />
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-outline-primary w-100" @onclick="SendSystemStateAsync">Send</button>
+        </div>
+    </div>
+    <div class="row g-2 mt-2">
+        <div class="col-md-4">
+            <label class="form-label">Last run (UTC)</label>
+            <input class="form-control" @bind="_systemLastRun" placeholder="2026-01-15T07:00:00Z" />
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-3">
+    <h5>Pump Command (Test)</h5>
+    <div class="row g-2">
+        <div class="col-md-2">
+            <label class="form-label">Action</label>
+            <select class="form-select" @bind="_pumpCmdAction">
+                <option value="start">start</option>
+                <option value="stop">stop</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Run seconds</label>
+            <input class="form-control" type="number" min="0" @bind="_pumpCmdRunSeconds" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Reason</label>
+            <input class="form-control" @bind="_pumpCmdReason" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Request id</label>
+            <input class="form-control" @bind="_pumpCmdRequestId" />
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-outline-primary w-100" @onclick="SendPumpCommandAsync">Send</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <div class="alert alert-info">@_statusMessage</div>
+}
+
+@code {
+    private int _waterLevelPercent = 63;
+    private bool[] _waterSensors = new[] { true, true, false, false };
+
+    private bool _pumpRunning = false;
+    private int _pumpLastRunSeconds = 30;
+    private string _pumpLastRequestId = Guid.NewGuid().ToString();
+
+    private string _alarmType = "LOW_WATER";
+    private string _alarmSeverity = "warning";
+    private string _alarmMessage = "Pump run blocked due to low water level";
+
+    private bool _systemPumpRunning;
+    private int _systemWaterLevelPercent = 63;
+    private bool _systemSafeToRun = true;
+    private string _systemNextScheduledRun = string.Empty;
+    private string _systemLastRun = string.Empty;
+
+    private string _pumpCmdAction = "start";
+    private int _pumpCmdRunSeconds = 30;
+    private string _pumpCmdReason = "test";
+    private string _pumpCmdRequestId = Guid.NewGuid().ToString();
+
+    private string? _statusMessage;
+
+    private async Task SendWaterLevelAsync()
+    {
+        var payload = new
+        {
+            levelPercent = _waterLevelPercent,
+            sensors = _waterSensors,
+            measuredAt = DateTimeOffset.UtcNow,
+            reportedAt = DateTimeOffset.UtcNow
+        };
+        await PostAsync("/api/test/mqtt/waterlevel", payload);
+    }
+
+    private async Task SendPumpStateAsync()
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["running"] = _pumpRunning,
+            ["lastRunSeconds"] = _pumpLastRunSeconds,
+            ["lastRequestId"] = string.IsNullOrWhiteSpace(_pumpLastRequestId) ? null : _pumpLastRequestId,
+            ["reportedAt"] = DateTimeOffset.UtcNow
+        };
+
+        if (_pumpRunning)
+        {
+            payload["since"] = DateTimeOffset.UtcNow;
+        }
+
+        await PostAsync("/api/test/mqtt/pumpstate", payload);
+    }
+
+    private async Task SendAlarmAsync()
+    {
+        var payload = new
+        {
+            type = _alarmType,
+            severity = _alarmSeverity,
+            message = _alarmMessage,
+            raisedAt = DateTimeOffset.UtcNow
+        };
+        await PostAsync("/api/test/mqtt/alarm", payload);
+    }
+
+    private async Task SendSystemStateAsync()
+    {
+        var payload = new
+        {
+            pumpRunning = _systemPumpRunning,
+            waterLevelPercent = _systemWaterLevelPercent,
+            safeToRun = _systemSafeToRun,
+            nextScheduledRun = ParseOptionalUtc(_systemNextScheduledRun),
+            lastRun = ParseOptionalUtc(_systemLastRun),
+            evaluatedAt = DateTimeOffset.UtcNow
+        };
+        await PostAsync("/api/test/mqtt/systemstate", payload);
+    }
+
+    private async Task SendPumpCommandAsync()
+    {
+        int? runSeconds = _pumpCmdAction == "start" ? _pumpCmdRunSeconds : null;
+        var payload = new
+        {
+            action = _pumpCmdAction,
+            runSeconds,
+            requestId = string.IsNullOrWhiteSpace(_pumpCmdRequestId) ? Guid.NewGuid().ToString() : _pumpCmdRequestId,
+            reason = _pumpCmdReason,
+            issuedAt = DateTimeOffset.UtcNow
+        };
+        await PostAsync("/api/test/mqtt/pumpcmd", payload);
+    }
+
+    private async Task PostAsync(string url, object payload)
+    {
+        _statusMessage = null;
+        try
+        {
+            var response = await Http.PostAsJsonAsync(url, payload);
+            _statusMessage = response.IsSuccessStatusCode
+                ? $"{url} OK"
+                : $"{url} failed ({(int)response.StatusCode})";
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"{url} error: {ex.Message}";
+        }
+    }
+
+    private void OnSensorChanged(int index, ChangeEventArgs args)
+    {
+        if (args.Value is bool value)
+        {
+            _waterSensors[index] = value;
+            return;
+        }
+
+        if (args.Value is string text && bool.TryParse(text, out var parsed))
+        {
+            _waterSensors[index] = parsed;
+        }
+    }
+
+    private static DateTimeOffset? ParseOptionalUtc(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.TryParse(input, out var value) ? value : null;
+    }
+}

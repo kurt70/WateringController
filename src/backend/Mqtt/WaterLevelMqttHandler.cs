@@ -1,27 +1,45 @@
-using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using WateringController.Backend.Contracts;
+using WateringController.Backend.Hubs;
 using WateringController.Backend.State;
 
 namespace WateringController.Backend.Mqtt;
 
+/// <summary>
+/// Parses water level MQTT payloads, updates state, and broadcasts to SignalR clients.
+/// </summary>
 public sealed class WaterLevelMqttHandler
 {
     private const int ExpectedSensorCount = 4;
     private readonly WaterLevelStateStore _store;
+    private readonly MqttTopics _topics;
+    private readonly IHubContext<WateringHub> _hubContext;
     private readonly ILogger<WaterLevelMqttHandler> _logger;
 
-    public WaterLevelMqttHandler(WaterLevelStateStore store, ILogger<WaterLevelMqttHandler> logger)
+    public WaterLevelMqttHandler(
+        WaterLevelStateStore store,
+        MqttTopics topics,
+        IHubContext<WateringHub> hubContext,
+        ILogger<WaterLevelMqttHandler> logger)
     {
         _store = store;
+        _topics = topics;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Checks whether the topic matches the water level state topic.
+    /// </summary>
     public bool CanHandle(string topic) =>
-        string.Equals(topic, MqttTopics.WaterLevelState, StringComparison.Ordinal);
+        string.Equals(topic, _topics.WaterLevelState, StringComparison.Ordinal);
 
-    public void Handle(string topic, ReadOnlyMemory<byte> payload, bool isRetained, DateTimeOffset receivedAt)
+    /// <summary>
+    /// Validates and applies a water level update, then notifies connected clients.
+    /// </summary>
+    public async Task HandleAsync(string topic, ReadOnlyMemory<byte> payload, bool isRetained, DateTimeOffset receivedAt)
     {
         if (!CanHandle(topic))
         {
@@ -29,13 +47,24 @@ public sealed class WaterLevelMqttHandler
             return;
         }
 
-        if (!TryParsePayload(payload.Span, out var parsed, out var error))
+        if (!TryParsePayload(payload, out var parsed, out var error))
         {
             _logger.LogWarning("Invalid water level payload: {Error}.", error);
             return;
         }
 
         _store.Update(parsed, receivedAt);
+
+        var update = new WaterLevelUpdate
+        {
+            LevelPercent = parsed.LevelPercent,
+            Sensors = parsed.Sensors,
+            MeasuredAt = parsed.MeasuredAt,
+            ReportedAt = parsed.ReportedAt,
+            ReceivedAt = receivedAt
+        };
+
+        await _hubContext.Clients.All.SendAsync("WaterLevelUpdated", update);
 
         _logger.LogInformation(
             "Water level update: {LevelPercent}% sensors={Sensors} measuredAt={MeasuredAt} reportedAt={ReportedAt} retained={Retained}.",
@@ -47,7 +76,7 @@ public sealed class WaterLevelMqttHandler
     }
 
     private static bool TryParsePayload(
-        ReadOnlySpan<byte> json,
+        ReadOnlyMemory<byte> json,
         out WaterLevelStatePayload payload,
         out string error)
     {

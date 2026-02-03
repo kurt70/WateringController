@@ -1,0 +1,687 @@
+@page "/schedules"
+@inject HttpClient Http
+@inject IJSRuntime Js
+
+<PageTitle>Schedules</PageTitle>
+
+<h1>Schedules</h1>
+
+<div class="card p-3 mb-3">
+    <h5>Add schedule</h5>
+    <div class="row g-2">
+        <div class="col-12 col-md-3">
+            <label class="form-label">
+                Start (local)
+                <span class="text-muted small ms-2" title="Stored as UTC. Local time and days are converted to UTC before saving; daylight savings may shift UTC times.">
+                    (UTC conversion)
+                </span>
+            </label>
+            <input class="form-control" type="text" inputmode="numeric" pattern="^[0-9:]*$" placeholder="HH:mm:ss" @bind="_newStartTime" />
+        </div>
+        <div class="col-12 col-md-3">
+            <label class="form-label">Run seconds</label>
+            <input class="form-control" type="number" min="1" step="1" @bind="_new.RunSeconds" />
+        </div>
+        <div class="col-12 col-md-4">
+            <label class="form-label">Days</label>
+            <div class="d-flex flex-wrap gap-2">
+                @for (var i = 0; i < DayTokens.Length; i++)
+                {
+                    var index = i;
+                    <label class="form-check form-check-inline mb-0">
+                        <input class="form-check-input" type="checkbox" @bind="_newDays[index]" />
+                        <span class="form-check-label">@DayTokens[index]</span>
+                    </label>
+                }
+            </div>
+        </div>
+        <div class="col-12 col-md-2 d-flex align-items-end">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" @bind="_new.Enabled" />
+                <label class="form-check-label">Enabled</label>
+            </div>
+        </div>
+    </div>
+    <div class="mt-3 d-flex gap-2 align-items-center">
+        <button class="btn btn-primary" @onclick="CreateAsync" disabled="@_busy">Add</button>
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <span class="@(_messageIsError ? "text-danger" : "text-muted")">@_message</span>
+        }
+    </div>
+</div>
+
+@if (_schedules.Count == 0)
+{
+    <p>No schedules.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+            <tr>
+                <th>Enabled</th>
+                <th>
+                    Start (local)
+                    <span class="text-muted small ms-2" title="Stored as UTC. Local time and days are converted to UTC before saving; daylight savings may shift UTC times.">
+                        (UTC)
+                    </span>
+                </th>
+                <th>Run (s)</th>
+                <th>Days</th>
+                <th>Last run</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var schedule in _schedules)
+            {
+                var isEditing = _editId == schedule.Id;
+                <tr>
+                    <td>
+                        @if (isEditing)
+                        {
+                            <input class="form-check-input" type="checkbox" @bind="_edit.Enabled" />
+                        }
+                        else
+                        {
+                            <span>@(schedule.Enabled ? "yes" : "no")</span>
+                        }
+                    </td>
+                    <td>
+                        @if (isEditing)
+                        {
+                            <input class="form-control form-control-sm" type="text" inputmode="numeric" pattern="^[0-9:]*$" placeholder="HH:mm:ss" @bind="_editStartTime" />
+                        }
+                        else
+                        {
+                            <span>@ToLocalTimeString(schedule.StartTimeUtc)</span>
+                        }
+                    </td>
+                    <td>
+                        @if (isEditing)
+                        {
+                            <input class="form-control form-control-sm" type="number" min="1" step="1" @bind="_edit.RunSeconds" />
+                        }
+                        else
+                        {
+                            <span>@schedule.RunSeconds</span>
+                        }
+                    </td>
+                    <td>
+                        @if (isEditing)
+                        {
+                            <div class="d-flex flex-wrap gap-2">
+                                @for (var i = 0; i < DayTokens.Length; i++)
+                                {
+                                    var index = i;
+                                    <label class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input" type="checkbox" @bind="_editDays[index]" />
+                                        <span class="form-check-label">@DayTokens[index]</span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span>@FormatLocalDays(schedule.DaysOfWeek, schedule.StartTimeUtc)</span>
+                        }
+                    </td>
+                    <td>@(string.IsNullOrWhiteSpace(schedule.LastRunDateUtc) ? "-" : schedule.LastRunDateUtc)</td>
+                    <td class="text-end">
+                        @if (isEditing)
+                        {
+                            <button class="btn btn-sm btn-success me-2" @onclick="() => SaveAsync(schedule.Id)" disabled="@_busy">Save</button>
+                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-success me-2" @onclick="() => RunNowAsync(schedule)" disabled="@_busy">Run now</button>
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => StartEdit(schedule)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(schedule.Id)" disabled="@_busy">Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Schedule> _schedules = new();
+    private Schedule _new = new();
+    private Schedule _edit = new();
+    private string _newStartTime = "07:00:00";
+    private string _editStartTime = "07:00:00";
+    private bool[] _newDays = new bool[7];
+    private bool[] _editDays = new bool[7];
+    private int? _editId;
+    private bool _busy;
+    private string? _message;
+    private bool _messageIsError;
+    private static readonly string[] DayTokens = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var data = await Http.GetFromJsonAsync<List<Schedule>>("/api/schedules");
+        _schedules = data ?? new List<Schedule>();
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _message = null;
+        _messageIsError = false;
+        try
+        {
+            if (!HasAnyDaySelected(_newDays))
+            {
+                _message = "Select at least one day.";
+                _messageIsError = true;
+                return;
+            }
+
+            _new.StartTimeUtc = ToUtcTimeString(_newStartTime);
+            _new.DaysOfWeek = BuildUtcDaysStringFromLocalFlags(_newDays, _newStartTime);
+            if (await TryHandleOverlapCreateAsync(_new))
+            {
+                return;
+            }
+
+            var response = await Http.PostAsJsonAsync("/api/schedules", _new);
+            if (response.IsSuccessStatusCode)
+            {
+                _new = new Schedule();
+                _newDays = new bool[7];
+                _newStartTime = "07:00:00";
+                await LoadAsync();
+                _message = "Schedule created.";
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                _message = string.IsNullOrWhiteSpace(detail)
+                    ? $"Failed to create schedule ({(int)response.StatusCode})."
+                    : detail;
+                _messageIsError = true;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartEdit(Schedule schedule)
+    {
+        _editId = schedule.Id;
+        _edit = new Schedule
+        {
+            Id = schedule.Id,
+            Enabled = schedule.Enabled,
+            StartTimeUtc = schedule.StartTimeUtc,
+            RunSeconds = schedule.RunSeconds,
+            DaysOfWeek = schedule.DaysOfWeek,
+            LastRunDateUtc = schedule.LastRunDateUtc
+        };
+        _editStartTime = ToLocalTimeString(schedule.StartTimeUtc);
+        _editDays = BuildLocalFlagsFromUtcDays(schedule.DaysOfWeek, schedule.StartTimeUtc);
+        _message = null;
+        _messageIsError = false;
+    }
+
+    private void CancelEdit()
+    {
+        _editId = null;
+        _editDays = new bool[7];
+        _editStartTime = "07:00:00";
+        _message = null;
+        _messageIsError = false;
+    }
+
+    private async Task SaveAsync(int id)
+    {
+        _busy = true;
+        _message = null;
+        _messageIsError = false;
+        try
+        {
+            if (!HasAnyDaySelected(_editDays))
+            {
+                _message = "Select at least one day.";
+                _messageIsError = true;
+                return;
+            }
+
+            _edit.StartTimeUtc = ToUtcTimeString(_editStartTime);
+            _edit.DaysOfWeek = BuildUtcDaysStringFromLocalFlags(_editDays, _editStartTime);
+            if (HasOverlap(_edit, id))
+            {
+                _message = "Schedule overlaps an existing schedule with the same days.";
+                _messageIsError = true;
+                return;
+            }
+
+            var response = await Http.PutAsJsonAsync($"/api/schedules/{id}", _edit);
+            if (response.IsSuccessStatusCode)
+            {
+                _editId = null;
+                _editDays = new bool[7];
+                _editStartTime = "07:00:00";
+                await LoadAsync();
+                _message = "Schedule updated.";
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                _message = string.IsNullOrWhiteSpace(detail)
+                    ? $"Failed to update schedule ({(int)response.StatusCode})."
+                    : detail;
+                _messageIsError = true;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        _busy = true;
+        _message = null;
+        _messageIsError = false;
+        try
+        {
+            var response = await Http.DeleteAsync($"/api/schedules/{id}");
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadAsync();
+                _message = "Schedule deleted.";
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                _message = string.IsNullOrWhiteSpace(detail)
+                    ? $"Failed to delete schedule ({(int)response.StatusCode})."
+                    : detail;
+                _messageIsError = true;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RunNowAsync(Schedule schedule)
+    {
+        _busy = true;
+        _message = null;
+        _messageIsError = false;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/pump/start", new { runSeconds = schedule.RunSeconds });
+            if (response.IsSuccessStatusCode)
+            {
+                _message = $"Scheduled run started (schedule #{schedule.Id}).";
+            }
+            else
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                _message = string.IsNullOrWhiteSpace(detail)
+                    ? $"Failed to start run ({(int)response.StatusCode})."
+                    : detail;
+                _messageIsError = true;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    @* If a new schedule overlaps an existing schedule with the same days, offer to expand the existing schedule. *@
+    private async Task<bool> TryHandleOverlapCreateAsync(Schedule candidate)
+    {
+        var overlap = FindOverlap(candidate, null);
+        if (overlap is null)
+        {
+            return false;
+        }
+
+        var confirm = await Js.InvokeAsync<bool>(
+            "confirm",
+            $"Schedule overlaps with #{overlap.Id}. Expand the existing schedule to cover both?");
+        if (!confirm)
+        {
+            _message = "Schedule overlaps an existing schedule with the same days.";
+            _messageIsError = true;
+            return true;
+        }
+
+        if (!TryMergeSchedules(overlap, candidate, out var merged))
+        {
+            _message = "Unable to merge overlapping schedules.";
+            _messageIsError = true;
+            return true;
+        }
+
+        var response = await Http.PutAsJsonAsync($"/api/schedules/{overlap.Id}", merged);
+        if (response.IsSuccessStatusCode)
+        {
+            _new = new Schedule();
+            _newDays = new bool[7];
+            await LoadAsync();
+            _message = $"Expanded schedule #{overlap.Id}.";
+            return true;
+        }
+
+        var detail = await response.Content.ReadAsStringAsync();
+        _message = string.IsNullOrWhiteSpace(detail)
+            ? $"Failed to update schedule ({(int)response.StatusCode})."
+            : detail;
+        _messageIsError = true;
+        return true;
+    }
+
+    private bool HasOverlap(Schedule candidate, int? excludeId)
+    {
+        return FindOverlap(candidate, excludeId) is not null;
+    }
+
+    @* Returns the first overlapping schedule that shares the same day set. *@
+    private Schedule? FindOverlap(Schedule candidate, int? excludeId)
+    {
+        if (!TryParseStart(candidate.StartTimeUtc, out var candidateStart))
+        {
+            return null;
+        }
+
+        var candidateEnd = candidateStart + TimeSpan.FromSeconds(candidate.RunSeconds);
+        foreach (var existing in _schedules)
+        {
+            if (excludeId.HasValue && existing.Id == excludeId.Value)
+            {
+                continue;
+            }
+
+            if (!HasSameDays(existing.DaysOfWeek, candidate.DaysOfWeek))
+            {
+                continue;
+            }
+
+            if (!TryParseStart(existing.StartTimeUtc, out var existingStart))
+            {
+                continue;
+            }
+
+            var existingEnd = existingStart + TimeSpan.FromSeconds(existing.RunSeconds);
+            if (IsOverlapping(existingStart, existingEnd, candidateStart, candidateEnd))
+            {
+                return existing;
+            }
+        }
+
+        return null;
+    }
+
+    @* Merges two schedules into a single window that spans both. *@
+    private static bool TryMergeSchedules(Schedule existing, Schedule candidate, out Schedule merged)
+    {
+        merged = existing;
+        if (!TryParseStart(existing.StartTimeUtc, out var existingStart) ||
+            !TryParseStart(candidate.StartTimeUtc, out var candidateStart))
+        {
+            return false;
+        }
+
+        var existingEnd = existingStart + TimeSpan.FromSeconds(existing.RunSeconds);
+        var candidateEnd = candidateStart + TimeSpan.FromSeconds(candidate.RunSeconds);
+
+        var newStart = existingStart < candidateStart ? existingStart : candidateStart;
+        var newEnd = existingEnd > candidateEnd ? existingEnd : candidateEnd;
+        var newRunSeconds = (int)Math.Max(1, (newEnd - newStart).TotalSeconds);
+
+        merged = new Schedule
+        {
+            Id = existing.Id,
+            Enabled = existing.Enabled,
+            StartTimeUtc = newStart.ToString(@"hh\:mm\:ss"),
+            RunSeconds = newRunSeconds,
+            DaysOfWeek = existing.DaysOfWeek,
+            LastRunDateUtc = existing.LastRunDateUtc
+        };
+
+        return true;
+    }
+
+    private static bool IsOverlapping(TimeSpan aStart, TimeSpan aEnd, TimeSpan bStart, TimeSpan bEnd)
+    {
+        return aStart < bEnd && bStart < aEnd;
+    }
+
+    private static bool TryParseStart(string? value, out TimeSpan start)
+    {
+        start = default;
+        return !string.IsNullOrWhiteSpace(value) && TimeSpan.TryParse(value, out start);
+    }
+
+    @* Normalizes time input to HH:mm:ss and defaults to 00 seconds if missing. *@
+    private static string NormalizeTimeString(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "00:00:00";
+        }
+
+        var trimmed = value.Trim();
+        if (TimeSpan.TryParse(trimmed, out var parsed))
+        {
+            return parsed.ToString(@"hh\:mm\:ss");
+        }
+
+        return "00:00:00";
+    }
+
+    @* Converts a local time string to a UTC time-of-day string. *@
+    private static string ToUtcTimeString(string? localTime)
+    {
+        var normalized = NormalizeTimeString(localTime);
+        if (!TimeSpan.TryParse(normalized, out var time))
+        {
+            return "00:00:00";
+        }
+
+        var localDate = DateTime.SpecifyKind(DateTime.Today.Add(time), DateTimeKind.Local);
+        var utc = localDate.ToUniversalTime();
+        return utc.ToString("HH:mm:ss");
+    }
+
+    @* Converts a UTC time string to a local time-of-day string for display/edit. *@
+    private static string ToLocalTimeString(string? utcTime)
+    {
+        var normalized = NormalizeTimeString(utcTime);
+        if (!TimeSpan.TryParse(normalized, out var time))
+        {
+            return "00:00:00";
+        }
+
+        var utcDate = DateTime.SpecifyKind(DateTime.UtcNow.Date.Add(time), DateTimeKind.Utc);
+        var local = utcDate.ToLocalTime();
+        return local.ToString("HH:mm:ss");
+    }
+
+    @* Treats null/empty days as "all days" and requires the same set for overlap handling. *@
+    private static bool HasSameDays(string? left, string? right)
+    {
+        var leftSet = NormalizeDays(left);
+        var rightSet = NormalizeDays(right);
+        if (leftSet is null || rightSet is null)
+        {
+            return leftSet is null && rightSet is null;
+        }
+
+        return leftSet.SetEquals(rightSet);
+    }
+
+    private static HashSet<string>? NormalizeDays(string? days)
+    {
+        if (string.IsNullOrWhiteSpace(days))
+        {
+            return null;
+        }
+
+        var tokens = days.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return new HashSet<string>(tokens, StringComparer.OrdinalIgnoreCase);
+    }
+
+    @* Builds a UTC day string from local day flags and local time. *@
+    private static string? BuildUtcDaysStringFromLocalFlags(bool[] flags, string? localTime)
+    {
+        var selected = new List<DayOfWeek>();
+        for (var i = 0; i < DayTokens.Length && i < flags.Length; i++)
+        {
+            if (flags[i])
+            {
+                selected.Add(TokenToDay(DayTokens[i]));
+            }
+        }
+
+        if (selected.Count == 0)
+        {
+            return null;
+        }
+
+        var localWeekStart = GetLocalWeekStart();
+        var utcDays = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalized = NormalizeTimeString(localTime);
+        TimeSpan.TryParse(normalized, out var time);
+
+        foreach (var day in selected)
+        {
+            var localDate = localWeekStart.AddDays(((int)day + 7 - (int)DayOfWeek.Monday) % 7).Add(time);
+            var utcDate = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localDate, DateTimeKind.Local));
+            utcDays.Add(DayToToken(utcDate.DayOfWeek));
+        }
+
+        return string.Join(',', DayTokens.Where(token => utcDays.Contains(token)));
+    }
+
+    @* Builds local day flags from stored UTC day tokens and UTC time. *@
+    private static bool[] BuildLocalFlagsFromUtcDays(string? utcDays, string? utcTime)
+    {
+        var flags = new bool[DayTokens.Length];
+        var set = NormalizeDays(utcDays);
+        if (set is null)
+        {
+            for (var i = 0; i < flags.Length; i++)
+            {
+                flags[i] = true;
+            }
+            return flags;
+        }
+
+        var utcWeekStart = GetUtcWeekStart();
+        var normalized = NormalizeTimeString(utcTime);
+        TimeSpan.TryParse(normalized, out var time);
+
+        foreach (var token in set)
+        {
+            var utcDay = TokenToDay(token);
+            var utcDate = utcWeekStart.AddDays(((int)utcDay + 7 - (int)DayOfWeek.Monday) % 7).Add(time);
+            var localDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcDate, DateTimeKind.Utc), TimeZoneInfo.Local);
+            flags[DayIndex(localDate.DayOfWeek)] = true;
+        }
+
+        return flags;
+    }
+
+    @* Formats local day tokens for display based on stored UTC days and time. *@
+    private static string FormatLocalDays(string? utcDays, string? utcTime)
+    {
+        var flags = BuildLocalFlagsFromUtcDays(utcDays, utcTime);
+        var tokens = DayTokens.Where((_, index) => flags[index]).ToArray();
+        return tokens.Length == 0 ? "-" : string.Join(',', tokens);
+    }
+
+    private static DateTime GetLocalWeekStart()
+    {
+        var today = DateTime.Today;
+        var delta = ((int)today.DayOfWeek + 6) % 7;
+        return today.AddDays(-delta);
+    }
+
+    private static DateTime GetUtcWeekStart()
+    {
+        var today = DateTime.UtcNow.Date;
+        var delta = ((int)today.DayOfWeek + 6) % 7;
+        return today.AddDays(-delta);
+    }
+
+    private static DayOfWeek TokenToDay(string token)
+    {
+        return token switch
+        {
+            "Mon" => DayOfWeek.Monday,
+            "Tue" => DayOfWeek.Tuesday,
+            "Wed" => DayOfWeek.Wednesday,
+            "Thu" => DayOfWeek.Thursday,
+            "Fri" => DayOfWeek.Friday,
+            "Sat" => DayOfWeek.Saturday,
+            "Sun" => DayOfWeek.Sunday,
+            _ => DayOfWeek.Monday
+        };
+    }
+
+    private static string DayToToken(DayOfWeek day)
+    {
+        return day switch
+        {
+            DayOfWeek.Monday => "Mon",
+            DayOfWeek.Tuesday => "Tue",
+            DayOfWeek.Wednesday => "Wed",
+            DayOfWeek.Thursday => "Thu",
+            DayOfWeek.Friday => "Fri",
+            DayOfWeek.Saturday => "Sat",
+            DayOfWeek.Sunday => "Sun",
+            _ => "Mon"
+        };
+    }
+
+    private static int DayIndex(DayOfWeek day)
+    {
+        return day switch
+        {
+            DayOfWeek.Monday => 0,
+            DayOfWeek.Tuesday => 1,
+            DayOfWeek.Wednesday => 2,
+            DayOfWeek.Thursday => 3,
+            DayOfWeek.Friday => 4,
+            DayOfWeek.Saturday => 5,
+            DayOfWeek.Sunday => 6,
+            _ => 0
+        };
+    }
+
+    @* Returns true when at least one day checkbox is selected. *@
+    private static bool HasAnyDaySelected(bool[] flags)
+    {
+        for (var i = 0; i < flags.Length; i++)
+        {
+            if (flags[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

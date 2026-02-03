@@ -6,4 +6,39 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
+  </ItemGroup>
+
+  <Target Name="PublishFrontend" BeforeTargets="CopyFrontendWwwroot">
+    <Exec
+      Command="dotnet publish ..\frontend\WateringController.Frontend.csproj -c $(Configuration)" />
+  </Target>
+
+  <Target Name="CleanBackendWwwroot" BeforeTargets="CopyFrontendWwwroot">
+    <PropertyGroup>
+      <BackendWwwroot>$(MSBuildProjectDirectory)\wwwroot\</BackendWwwroot>
+      <BackendFramework>$(BackendWwwroot)_framework\</BackendFramework>
+    </PropertyGroup>
+    <RemoveDir Directories="$(BackendFramework)" Condition="Exists('$(BackendFramework)')" />
+    <Delete Files="$(BackendWwwroot)index.html;$(BackendWwwroot)index.html.br;$(BackendWwwroot)index.html.gz" />
+  </Target>
+
+  <Target Name="CopyFrontendWwwroot" AfterTargets="Build">
+    <PropertyGroup>
+      <FrontendPublishWwwroot>$(MSBuildProjectDirectory)\..\frontend\bin\$(Configuration)\net10.0\publish\wwwroot\**\*</FrontendPublishWwwroot>
+      <BackendWwwroot>$(MSBuildProjectDirectory)\wwwroot\</BackendWwwroot>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\..\frontend\bin\$(Configuration)\net10.0\publish\wwwroot')">
+      <FrontendPublishFiles Include="$(FrontendPublishWwwroot)" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(FrontendPublishFiles)"
+      DestinationFiles="@(FrontendPublishFiles->'$(BackendWwwroot)%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true"
+      Condition="@(FrontendPublishFiles) != ''" />
+  </Target>
+
 </Project>

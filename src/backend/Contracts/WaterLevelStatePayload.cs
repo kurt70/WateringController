@@ -1,5 +1,8 @@
 namespace WateringController.Backend.Contracts;
 
+/// <summary>
+/// Raw water level payload received via MQTT.
+/// </summary>
 public sealed record WaterLevelStatePayload
 {
     public int LevelPercent { get; init; }

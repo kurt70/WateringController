@@ -1,0 +1,70 @@
+@page "/control"
+@inject HttpClient Http
+
+<PageTitle>Control</PageTitle>
+
+<h1>Control</h1>
+
+<div class="card p-3 mb-3">
+    <h5>Manual Pump Control</h5>
+    <div class="input-group mb-2">
+        <span class="input-group-text">Run seconds</span>
+        <input class="form-control" type="number" min="1" step="1" @bind="_runSeconds" />
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" @onclick="StartPumpAsync" disabled="@_isBusy">Start</button>
+        <button class="btn btn-danger" @onclick="StopPumpAsync" disabled="@_isBusy">Stop</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_pumpMessage))
+    {
+        <div class="mt-2">@_pumpMessage</div>
+    }
+</div>
+
+@code {
+    private int _runSeconds = 30;
+    private string? _pumpMessage;
+    private bool _isBusy;
+
+    private async Task StartPumpAsync()
+    {
+        _isBusy = true;
+        _pumpMessage = null;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/pump/start", new { runSeconds = _runSeconds });
+            _pumpMessage = response.IsSuccessStatusCode
+                ? "Pump start command sent."
+                : $"Failed to start pump ({(int)response.StatusCode}).";
+        }
+        catch (Exception ex)
+        {
+            _pumpMessage = $"Failed to start pump: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task StopPumpAsync()
+    {
+        _isBusy = true;
+        _pumpMessage = null;
+        try
+        {
+            var response = await Http.PostAsync("/api/pump/stop", null);
+            _pumpMessage = response.IsSuccessStatusCode
+                ? "Pump stop command sent."
+                : $"Failed to stop pump ({(int)response.StatusCode}).";
+        }
+        catch (Exception ex)
+        {
+            _pumpMessage = $"Failed to stop pump: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

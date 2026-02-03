@@ -93,6 +93,7 @@ MQTT is used **only** for device-level communication.
 - Allow user to:
   - configure watering schedules
   - manually trigger watering (if allowed)
+  - manually stop watering (emergency stop)
   - view system status and alarms
 - Display live updates via SignalR
 
@@ -190,6 +191,7 @@ This layered approach prevents:
 - Scheduling logic runs in backend
 - Implemented using a BackgroundService
 - Schedule data stored persistently (SQLite)
+- Alarm and run history stored persistently (SQLite)
 - Time calculations are deterministic and testable
 - Manual overrides are evaluated through same safety logic
 
