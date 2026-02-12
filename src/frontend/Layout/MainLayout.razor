@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IAsyncDisposable
 @inject WateringHubClient HubClient
+@inject ILogger<MainLayout> Logger
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -20,7 +21,15 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        await HubClient.StartAsync();
+        try
+        {
+            await HubClient.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            // SignalR may be temporarily unavailable during startup; pages use HTTP fallbacks.
+            Logger.LogWarning(ex, "SignalR startup failed in layout initialization.");
+        }
     }
 
     public async ValueTask DisposeAsync()
