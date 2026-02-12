@@ -15,5 +15,5 @@ public sealed class MqttOptions
     public string? Password { get; init; }
     public int KeepAliveSeconds { get; init; } = 30;
     public int ReconnectSeconds { get; init; } = 5;
-    public string TopicPrefix { get; init; } = "WateringController";
+    public string TopicPrefix { get; init; } = "home/veranda";
 }

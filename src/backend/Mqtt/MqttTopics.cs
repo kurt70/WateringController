@@ -12,10 +12,10 @@ public sealed class MqttTopics
     /// </summary>
     public MqttTopics(IOptions<MqttOptions> options)
     {
-        var prefix = (options.Value.TopicPrefix ?? "WateringController").Trim('/');
+        var prefix = (options.Value.TopicPrefix ?? "home/veranda").Trim('/');
         if (string.IsNullOrWhiteSpace(prefix))
         {
-            prefix = "WateringController";
+            prefix = "home/veranda";
         }
 
         var basePrefix = $"{prefix}/WateringController";

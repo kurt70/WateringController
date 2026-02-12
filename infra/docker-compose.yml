@@ -16,7 +16,7 @@ services:
   #   environment:
   #     - Mqtt__Host=mqtt
   #     - Mqtt__Port=1883
-  #     - Mqtt__TopicPrefix=WateringController
+  #     - Mqtt__TopicPrefix=home/veranda
   #     - WATERING_DB_PATH=/data/watering.db
   #   volumes:
   #     - ./data:/data

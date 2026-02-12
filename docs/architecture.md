@@ -1,7 +1,7 @@
-# System Architecture – Veranda Watering System
+# System Architecture – Watering Controller
 
 This document describes the architecture, responsibilities, and data flow
-of the Veranda Watering System.
+of the Watering Controller system.
 
 It complements `docs/mqtt.md` and explains *why* the system is structured
 the way it is.
@@ -10,7 +10,7 @@ the way it is.
 
 ## 1. High-Level Overview
 
-The system controls a veranda watering setup consisting of:
+The system controls a watering setup consisting of:
 - A water pump
 - A water barrel with level sensors
 - Two ESP32 microcontrollers
@@ -126,10 +126,10 @@ Home Assistant does **not** control the pump directly.
    - freshness of level data
    - pump availability
 3. If safe:
-   - backend publishes `veranda/pump/cmd`
+   - backend publishes `<config_prefix>/WateringController/pump/cmd`
 4. Pump ESP32:
    - starts pump
-   - publishes `veranda/pump/state`
+   - publishes `<config_prefix>/WateringController/pump/state`
 5. Backend:
    - updates system state
    - pushes updates to frontend and HA
@@ -139,11 +139,11 @@ Home Assistant does **not** control the pump directly.
 ### 3.2 Water Level Update
 
 1. Water level ESP32 reads sensors
-2. Publishes `veranda/waterlevel/state`
+2. Publishes `<config_prefix>/WateringController/waterlevel/state`
 3. Backend:
    - caches level
    - re-evaluates safety
-   - updates `veranda/system/state`
+   - updates `<config_prefix>/WateringController/system/state`
    - pushes updates via SignalR
 
 ---
@@ -156,7 +156,7 @@ Home Assistant does **not** control the pump directly.
    - stale/missing level data
 3. Backend:
    - does NOT publish pump command
-   - emits `veranda/system/alarm`
+   - emits `<config_prefix>/WateringController/system/alarm`
 4. Frontend + Home Assistant reflect blocked state
 
 ---

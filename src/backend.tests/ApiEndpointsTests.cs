@@ -16,6 +16,9 @@ using Xunit;
 
 namespace WateringController.Backend.Tests;
 
+/// <summary>
+/// Covers HTTP endpoints used by the backend.
+/// </summary>
 public sealed class ApiEndpointsTests
 {
     [Fact]
@@ -228,6 +231,66 @@ public sealed class ApiEndpointsTests
     }
 
     [Fact]
+    public async Task ScheduleEndpoints_DeleteRemoves()
+    {
+        using var factory = new TestFactory();
+        var client = factory.CreateClient();
+
+        var create = new ScheduleRequest
+        {
+            Enabled = true,
+            StartTimeUtc = "07:00",
+            RunSeconds = 30,
+            DaysOfWeek = "Mon,Wed"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/api/schedules", create);
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var created = await createResponse.Content.ReadFromJsonAsync<IdResponse>();
+        Assert.NotNull(created);
+
+        var deleteResponse = await client.DeleteAsync($"/api/schedules/{created!.Id}");
+        Assert.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+
+        var list = await client.GetFromJsonAsync<List<WateringSchedule>>("/api/schedules");
+        Assert.NotNull(list);
+        Assert.DoesNotContain(list!, item => item.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task ScheduleEndpoints_UpdateClearsLastRunDate()
+    {
+        using var factory = new TestFactory();
+        var repository = factory.Services.GetRequiredService<ScheduleRepository>();
+        var id = await repository.AddAsync(new WateringSchedule
+        {
+            Enabled = true,
+            StartTimeUtc = "07:00",
+            RunSeconds = 30,
+            DaysOfWeek = "Mon",
+            LastRunDateUtc = "2026-02-01"
+        }, CancellationToken.None);
+
+        var update = new ScheduleRequest
+        {
+            Enabled = true,
+            StartTimeUtc = "07:15",
+            RunSeconds = 35,
+            DaysOfWeek = "Mon"
+        };
+
+        var client = factory.CreateClient();
+        var response = await client.PutAsJsonAsync($"/api/schedules/{id}", update);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var list = await client.GetFromJsonAsync<List<WateringSchedule>>("/api/schedules");
+        Assert.NotNull(list);
+        var schedule = Assert.Single(list!, item => item.Id == id);
+        Assert.Null(schedule.LastRunDateUtc);
+    }
+
+    [Fact]
     public async Task AlarmsRecent_ReturnsOk()
     {
         using var factory = new TestFactory();
@@ -280,6 +343,37 @@ public sealed class ApiEndpointsTests
     }
 
     [Fact]
+    public async Task HistoryRecent_ReturnsMostRecentFirst()
+    {
+        using var factory = new TestFactory();
+        var repository = factory.Services.GetRequiredService<RunHistoryRepository>();
+        await repository.AddAsync(new RunHistoryEntry
+        {
+            ScheduleId = null,
+            RequestedAtUtc = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero),
+            RunSeconds = 10,
+            Allowed = true,
+            Reason = "first"
+        }, CancellationToken.None);
+
+        await repository.AddAsync(new RunHistoryEntry
+        {
+            ScheduleId = null,
+            RequestedAtUtc = new DateTimeOffset(2026, 2, 2, 7, 1, 0, TimeSpan.Zero),
+            RunSeconds = 12,
+            Allowed = false,
+            Reason = "second"
+        }, CancellationToken.None);
+
+        var client = factory.CreateClient();
+        var items = await client.GetFromJsonAsync<List<RunHistoryEntry>>("/api/history/recent?limit=2");
+        Assert.NotNull(items);
+        Assert.Equal(2, items!.Count);
+        Assert.Equal("second", items[0].Reason);
+        Assert.Equal("first", items[1].Reason);
+    }
+
+    [Fact]
     public async Task AlarmsRecent_RespectsLimit()
     {
         using var factory = new TestFactory();
@@ -309,6 +403,37 @@ public sealed class ApiEndpointsTests
         var items = await response.Content.ReadFromJsonAsync<List<SystemAlarmUpdate>>();
         Assert.NotNull(items);
         Assert.Single(items!);
+    }
+
+    [Fact]
+    public async Task AlarmsRecent_ReturnsMostRecentFirst()
+    {
+        using var factory = new TestFactory();
+        var repository = factory.Services.GetRequiredService<AlarmRepository>();
+        await repository.AddAsync(new AlarmRecord
+        {
+            Type = "LOW_WATER",
+            Severity = "warning",
+            Message = "first",
+            RaisedAtUtc = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero),
+            ReceivedAtUtc = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero)
+        }, CancellationToken.None);
+
+        await repository.AddAsync(new AlarmRecord
+        {
+            Type = "LEVEL_UNKNOWN",
+            Severity = "warning",
+            Message = "second",
+            RaisedAtUtc = new DateTimeOffset(2026, 2, 2, 7, 1, 0, TimeSpan.Zero),
+            ReceivedAtUtc = new DateTimeOffset(2026, 2, 2, 7, 1, 0, TimeSpan.Zero)
+        }, CancellationToken.None);
+
+        var client = factory.CreateClient();
+        var items = await client.GetFromJsonAsync<List<SystemAlarmUpdate>>("/api/alarms/recent?limit=2");
+        Assert.NotNull(items);
+        Assert.Equal(2, items!.Count);
+        Assert.Equal("second", items[0].Message);
+        Assert.Equal("first", items[1].Message);
     }
 
     [Fact]
@@ -380,9 +505,128 @@ public sealed class ApiEndpointsTests
         Assert.Contains("MQTT", problem.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task WaterLevelLatest_ReturnsNoContentWhenMissing()
+    {
+        using var factory = new TestFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/waterlevel/latest");
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WaterLevelLatest_ReturnsLatestSnapshot()
+    {
+        using var factory = new TestFactory();
+        var store = factory.Services.GetRequiredService<WaterLevelStateStore>();
+        var now = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero);
+        store.Update(new WaterLevelStatePayload
+        {
+            LevelPercent = 40,
+            Sensors = new[] { true, false, false, false },
+            MeasuredAt = now,
+            ReportedAt = now
+        }, now);
+
+        var client = factory.CreateClient();
+        var response = await client.GetAsync("/api/waterlevel/latest");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<WaterLevelUpdate>();
+        Assert.NotNull(payload);
+        Assert.Equal(40, payload!.LevelPercent);
+    }
+
+    [Fact]
+    public async Task PumpLatest_ReturnsNoContentWhenMissing()
+    {
+        using var factory = new TestFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/pump/latest");
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PumpLatest_ReturnsLatestSnapshot()
+    {
+        using var factory = new TestFactory();
+        var store = factory.Services.GetRequiredService<PumpStateStore>();
+        var now = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero);
+        store.Update(new PumpStatePayload
+        {
+            Running = false,
+            Since = null,
+            LastRunSeconds = 20,
+            LastRequestId = "abc",
+            ReportedAt = now
+        }, now);
+
+        var client = factory.CreateClient();
+        var response = await client.GetAsync("/api/pump/latest");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<PumpStateUpdate>();
+        Assert.NotNull(payload);
+        Assert.False(payload!.Running);
+        Assert.Equal(20, payload.LastRunSeconds);
+    }
+
+    [Fact]
+    public async Task TestMqttEndpoints_ReturnConflictWhenDisconnected()
+    {
+        using var factory = new TestFactory(isConnected: false);
+        var client = factory.CreateClient();
+        var now = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero);
+
+        var response = await client.PostAsJsonAsync("/api/test/mqtt/waterlevel", new WaterLevelStatePayload
+        {
+            LevelPercent = 10,
+            Sensors = new[] { true, false, false, false },
+            MeasuredAt = now,
+            ReportedAt = now
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TestMqttEndpoints_PublishesWhenConnected()
+    {
+        using var factory = new TestFactory();
+        var publisher = factory.Services.GetRequiredService<IMqttPublisher>();
+        var topics = factory.Services.GetRequiredService<MqttTopics>();
+        var client = factory.CreateClient();
+        var now = new DateTimeOffset(2026, 2, 2, 7, 0, 0, TimeSpan.Zero);
+
+        var response = await client.PostAsJsonAsync("/api/test/mqtt/pumpstate", new PumpStatePayload
+        {
+            Running = false,
+            Since = null,
+            LastRunSeconds = 10,
+            LastRequestId = "abc",
+            ReportedAt = now
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        A.CallTo(() => publisher.PublishAsync(topics.PumpState, A<string>._, true, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    /// <summary>
+    /// Minimal ID response shape from schedule create.
+    /// </summary>
     private sealed record IdResponse(int Id);
+
+    /// <summary>
+    /// Minimal problem details payload for conflicts.
+    /// </summary>
     private sealed record ProblemDetailsResponse(string? Type, string? Title, int? Status, string? Detail, string? Instance);
 
+    /// <summary>
+    /// Test server factory that overrides MQTT and storage dependencies.
+    /// </summary>
     private sealed class TestFactory : WebApplicationFactory<Program>
     {
         private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"watering-api-{Guid.NewGuid():N}.db");

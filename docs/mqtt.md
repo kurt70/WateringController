@@ -24,7 +24,8 @@ The backend is the sole authority for scheduling and safety decisions.
 ## Topic Naming Convention
 
 <config_prefix>/WateringController/<component>/<type>
-- `config_prefix` is configurable via `Mqtt:TopicPrefix` (defaults to `WateringController`)
+- `config_prefix` is configurable via `Mqtt:TopicPrefix` (defaults to `home/veranda`)
+- Example: `home/garden/WateringController/pump/state`
 - `<component>`: `pump` | `waterlevel` | `system`
 - `<type>`: `cmd` | `state` | `alarm`
 
@@ -68,6 +69,7 @@ Command the pump controller to run the pump for a fixed duration.
   "reason": "schedule",
   "issuedAt": "2026-01-15T07:00:00Z"
 }
+```
 
 #### Field Definitions
 | Field	| Type | Required | Description |
@@ -114,6 +116,7 @@ Report current and last-known pump state.
   "lastRequestId": "uuid",
   "reportedAt": "2026-01-15T07:00:01Z"
 }
+```
 
 #### Field Definitions
 | Field	| Type | Required | Description |
@@ -147,13 +150,14 @@ Report water level derived from induction sensors.
   "measuredAt": "2026-01-15T06:55:00Z",
   "reportedAt": "2026-01-15T06:55:01Z"
 }
+```
 
 
 #### Field Definitions
 | Field	| Type | Required | Description |
 |-------|------|----------|-------------|
 | levelPercent | int | yes | 0–100 derived level |
-| ssensors | bool[] | yes | Bottom → top sensors |
+| sensors | bool[] | yes | Bottom → top sensors |
 | measuredAt | string | yes | When (UTC) level was measured |
 | reportedAt | string  | yes | When published |
 
@@ -165,11 +169,11 @@ Report water level derived from induction sensors.
 Expose aggregated system state to UI and Home Assistant.
 
 #### Publisher
-- Backend
+- Backend (not yet implemented; topic reserved)
 
 #### Subscriber
-- Frontend
-- Home Assistant
+- Frontend (not yet implemented; frontend uses SignalR + HTTP)
+- Home Assistant (reserved)
 
 #### Retained
 - Yes
@@ -184,10 +188,21 @@ Expose aggregated system state to UI and Home Assistant.
   "lastRun": "2026-01-15T07:00:00Z",
   "evaluatedAt": "2026-01-15T07:01:00Z"
 }
+```
 
-## 8. Alarm Topics
+#### Field Definitions
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| pumpRunning | bool | yes | Whether the pump is currently running |
+| waterLevelPercent | int | yes | Latest known water level percentage |
+| safeToRun | bool | yes | Backend safety evaluation result |
+| nextScheduledRun | string (UTC) | optional | Next scheduled run time, if any |
+| lastRun | string (UTC) | optional | Last completed run time, if any |
+| evaluatedAt | string (UTC) | yes | When the backend evaluated the system state |
 
-### 8.1 `<config_prefix>/WateringController/system/alarm`
+## 7. Alarm Topics
+
+### 7.1 `<config_prefix>/WateringController/system/alarm`
 
 #### Purpose
 Emit safety or system alarms.
@@ -200,7 +215,7 @@ Emit safety or system alarms.
 - Home Assistant
 
 #### Retained
-- yes
+- Yes
 
 #### Payload Schema
 ```json
@@ -210,12 +225,13 @@ Emit safety or system alarms.
   "message": "Pump run blocked due to low water level",
   "raisedAt": "2026-01-15T07:00:00Z"
 }
+```
 
 
 
 #### Alarm Types
-| Type	| Description |
-|-------|------|----------|-------------|
+| Type | Description |
+|------|-------------|
 | LOW_WATER | Water below threshold |
 | LEVEL_UNKNOWN | No recent level data |
 | MQTT_DISCONNECTED | Broker connection lost |

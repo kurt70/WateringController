@@ -5,6 +5,9 @@ using Xunit;
 
 namespace WateringController.Backend.Tests;
 
+/// <summary>
+/// Validates repository persistence against the SQLite backing store.
+/// </summary>
 public sealed class RepositoryTests
 {
     [Fact]
@@ -23,6 +26,69 @@ public sealed class RepositoryTests
 
         var schedules = await repository.GetAllAsync(CancellationToken.None);
         Assert.Contains(schedules, schedule => schedule.Id == id);
+    }
+
+    [Fact]
+    public async Task ScheduleRepository_UpdatesLastRunDate()
+    {
+        await using var scope = await CreateScopeWithDbAsync();
+        var repository = scope.ServiceProvider.GetRequiredService<ScheduleRepository>();
+
+        var id = await repository.AddAsync(new WateringSchedule
+        {
+            Enabled = true,
+            StartTimeUtc = "07:00",
+            RunSeconds = 30,
+            DaysOfWeek = "Mon"
+        }, CancellationToken.None);
+
+        await repository.UpdateLastRunDateAsync(id, "2026-02-02", CancellationToken.None);
+
+        var schedules = await repository.GetAllAsync(CancellationToken.None);
+        var schedule = Assert.Single(schedules, item => item.Id == id);
+        Assert.Equal("2026-02-02", schedule.LastRunDateUtc);
+    }
+
+    [Fact]
+    public async Task ScheduleRepository_ClearsLastRunDate()
+    {
+        await using var scope = await CreateScopeWithDbAsync();
+        var repository = scope.ServiceProvider.GetRequiredService<ScheduleRepository>();
+
+        var id = await repository.AddAsync(new WateringSchedule
+        {
+            Enabled = true,
+            StartTimeUtc = "07:00",
+            RunSeconds = 30,
+            DaysOfWeek = "Mon",
+            LastRunDateUtc = "2026-02-02"
+        }, CancellationToken.None);
+
+        await repository.ClearLastRunDateAsync(id, CancellationToken.None);
+
+        var schedules = await repository.GetAllAsync(CancellationToken.None);
+        var schedule = Assert.Single(schedules, item => item.Id == id);
+        Assert.Null(schedule.LastRunDateUtc);
+    }
+
+    [Fact]
+    public async Task ScheduleRepository_DeletesSchedule()
+    {
+        await using var scope = await CreateScopeWithDbAsync();
+        var repository = scope.ServiceProvider.GetRequiredService<ScheduleRepository>();
+
+        var id = await repository.AddAsync(new WateringSchedule
+        {
+            Enabled = true,
+            StartTimeUtc = "07:00",
+            RunSeconds = 30,
+            DaysOfWeek = "Mon"
+        }, CancellationToken.None);
+
+        await repository.DeleteAsync(id, CancellationToken.None);
+
+        var schedules = await repository.GetAllAsync(CancellationToken.None);
+        Assert.DoesNotContain(schedules, schedule => schedule.Id == id);
     }
 
     [Fact]
@@ -76,6 +142,9 @@ public sealed class RepositoryTests
         return new TestDbScope(provider, dbPath);
     }
 
+    /// <summary>
+    /// Owns the temporary test database and cleans it up.
+    /// </summary>
     private sealed class TestDbScope : IAsyncDisposable
     {
         private readonly ServiceProvider _provider;

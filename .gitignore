@@ -247,6 +247,9 @@ FakesAssemblies/
 **/*.Server/ModelManifest.xml
 _Pvt_Extensions
 
+# Firmware secrets
+infra/firmware/**/include/config.h
+
 # Paket dependency manager
 .paket/paket.exe
 paket-files/

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <style>
+    .box { fill: #f7f7f7; stroke: #333; stroke-width: 2; rx: 8; }
+    .title { font: 16px sans-serif; font-weight: 600; }
+    .label { font: 14px sans-serif; }
+    .wire { stroke: #333; stroke-width: 2; fill: none; }
+    .power { stroke: #c62828; stroke-width: 2; fill: none; }
+    .gnd { stroke: #1565c0; stroke-width: 2; fill: none; }
+  </style>
+
+  <text x="40" y="40" class="title">Pump + Level Wiring (12V distribution, 5V local regulation)</text>
+
+  <!-- Pump station -->
+  <rect x="40" y="80" width="520" height="560" class="box"/>
+  <text x="60" y="110" class="title">Pump Station</text>
+
+  <rect x="80" y="140" width="140" height="60" class="box"/>
+  <text x="95" y="175" class="label">12V PSU</text>
+
+  <rect x="260" y="140" width="140" height="60" class="box"/>
+  <text x="275" y="175" class="label">Buck 12V→5V</text>
+
+  <rect x="80" y="250" width="140" height="60" class="box"/>
+  <text x="95" y="285" class="label">Relay</text>
+
+  <rect x="260" y="250" width="140" height="60" class="box"/>
+  <text x="275" y="285" class="label">BC547</text>
+
+  <rect x="80" y="360" width="140" height="60" class="box"/>
+  <text x="95" y="395" class="label">Pump</text>
+
+  <rect x="260" y="360" width="140" height="60" class="box"/>
+  <text x="275" y="395" class="label">ESP32</text>
+
+  <!-- Level station -->
+  <rect x="640" y="80" width="520" height="560" class="box"/>
+  <text x="660" y="110" class="title">Level Station</text>
+
+  <rect x="680" y="140" width="140" height="60" class="box"/>
+  <text x="695" y="175" class="label">Buck 12V→5V</text>
+
+  <rect x="860" y="140" width="140" height="60" class="box"/>
+  <text x="875" y="175" class="label">ESP32</text>
+
+  <rect x="680" y="260" width="140" height="60" class="box"/>
+  <text x="695" y="295" class="label">XKC-Y25-V</text>
+
+  <rect x="860" y="260" width="140" height="60" class="box"/>
+  <text x="875" y="295" class="label">DS18B20</text>
+
+  <rect x="680" y="380" width="140" height="60" class="box"/>
+  <text x="695" y="415" class="label">BME280/680</text>
+
+  <!-- Wires -->
+  <path d="M220 170 L260 170" class="power"/>
+  <text x="225" y="155" class="label">12V</text>
+
+  <path d="M330 200 L330 250" class="power"/>
+  <text x="340" y="230" class="label">5V</text>
+
+  <path d="M150 200 L150 250" class="power"/>
+  <text x="160" y="230" class="label">12V</text>
+
+  <path d="M150 310 L150 360" class="power"/>
+  <text x="160" y="340" class="label">NO/COM</text>
+
+  <path d="M330 310 L330 360" class="wire"/>
+  <text x="340" y="340" class="label">GPIO→Driver</text>
+
+  <path d="M560 170 L640 170" class="power"/>
+  <text x="565" y="155" class="label">12V feed</text>
+
+  <path d="M820 170 L860 170" class="power"/>
+  <text x="825" y="155" class="label">5V</text>
+
+  <path d="M930 200 L930 260" class="wire"/>
+  <text x="940" y="240" class="label">GPIO</text>
+
+  <path d="M790 200 L790 260" class="wire"/>
+  <text x="800" y="240" class="label">GPIO</text>
+
+  <path d="M790 200 L790 380" class="wire"/>
+  <text x="800" y="330" class="label">I2C</text>
+</svg>

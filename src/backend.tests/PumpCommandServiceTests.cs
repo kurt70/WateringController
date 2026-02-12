@@ -8,6 +8,9 @@ using Xunit;
 
 namespace WateringController.Backend.Tests;
 
+/// <summary>
+/// Covers safety checks and publishing behavior for manual and scheduled pump commands.
+/// </summary>
 public sealed class PumpCommandServiceTests
 {
     [Fact]
@@ -25,6 +28,40 @@ public sealed class PumpCommandServiceTests
 
         Assert.False(result.Success);
         Assert.Equal("level_unknown", result.Reason);
+    }
+
+    [Fact]
+    public async Task StartManualAsync_BlocksWhenMqttDisconnected()
+    {
+        var publisher = A.Fake<IMqttPublisher>();
+        A.CallTo(() => publisher.IsConnected).Returns(false);
+
+        using var provider = new TestServiceProviderBuilder()
+            .WithMqttPublisher(publisher)
+            .Build();
+
+        var service = provider.GetRequiredService<PumpCommandService>();
+        var result = await service.StartManualAsync(30, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("mqtt_disconnected", result.Reason);
+    }
+
+    [Fact]
+    public async Task StartManualAsync_BlocksWhenInvalidDuration()
+    {
+        var publisher = A.Fake<IMqttPublisher>();
+        A.CallTo(() => publisher.IsConnected).Returns(true);
+
+        using var provider = new TestServiceProviderBuilder()
+            .WithMqttPublisher(publisher)
+            .Build();
+
+        var service = provider.GetRequiredService<PumpCommandService>();
+        var result = await service.StartManualAsync(0, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("runSeconds must be greater than zero.", result.Error);
     }
 
     [Fact]
@@ -106,5 +143,86 @@ public sealed class PumpCommandServiceTests
         var topics = provider.GetRequiredService<WateringController.Backend.Mqtt.MqttTopics>();
         A.CallTo(() => publisher.PublishAsync(topics.PumpCommand, A<string>._, false, A<CancellationToken>._))
             .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task StopManualAsync_BlocksWhenMqttDisconnected()
+    {
+        var publisher = A.Fake<IMqttPublisher>();
+        A.CallTo(() => publisher.IsConnected).Returns(false);
+
+        using var provider = new TestServiceProviderBuilder()
+            .WithMqttPublisher(publisher)
+            .Build();
+
+        var service = provider.GetRequiredService<PumpCommandService>();
+        var result = await service.StopManualAsync(CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("mqtt_disconnected", result.Reason);
+    }
+
+    [Fact]
+    public async Task StopManualAsync_PublishesCommand()
+    {
+        var publisher = A.Fake<IMqttPublisher>();
+        A.CallTo(() => publisher.IsConnected).Returns(true);
+
+        using var provider = new TestServiceProviderBuilder()
+            .WithMqttPublisher(publisher)
+            .Build();
+
+        var service = provider.GetRequiredService<PumpCommandService>();
+        var result = await service.StopManualAsync(CancellationToken.None);
+
+        Assert.True(result.Success);
+        var topics = provider.GetRequiredService<WateringController.Backend.Mqtt.MqttTopics>();
+        A.CallTo(() => publisher.PublishAsync(topics.PumpCommand, A<string>._, false, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task StartScheduledAsync_PublishesCommandWhenSafe()
+    {
+        var publisher = A.Fake<IMqttPublisher>();
+        A.CallTo(() => publisher.IsConnected).Returns(true);
+
+        using var provider = new TestServiceProviderBuilder()
+            .WithMqttPublisher(publisher)
+            .Build();
+
+        var store = provider.GetRequiredService<WaterLevelStateStore>();
+        store.Update(new WaterLevelStatePayload
+        {
+            LevelPercent = 50,
+            Sensors = new[] { true, true, true, true },
+            MeasuredAt = DateTimeOffset.UtcNow,
+            ReportedAt = DateTimeOffset.UtcNow
+        }, DateTimeOffset.UtcNow);
+
+        var service = provider.GetRequiredService<PumpCommandService>();
+        var result = await service.StartScheduledAsync(30, CancellationToken.None);
+
+        Assert.True(result.Success);
+        var topics = provider.GetRequiredService<WateringController.Backend.Mqtt.MqttTopics>();
+        A.CallTo(() => publisher.PublishAsync(topics.PumpCommand, A<string>._, false, A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
+    }
+
+    [Fact]
+    public async Task StartScheduledAsync_BlocksWhenInvalidDuration()
+    {
+        var publisher = A.Fake<IMqttPublisher>();
+        A.CallTo(() => publisher.IsConnected).Returns(true);
+
+        using var provider = new TestServiceProviderBuilder()
+            .WithMqttPublisher(publisher)
+            .Build();
+
+        var service = provider.GetRequiredService<PumpCommandService>();
+        var result = await service.StartScheduledAsync(0, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("invalid_duration", result.Reason);
     }
 }

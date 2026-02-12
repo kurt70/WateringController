@@ -1,4 +1,6 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IAsyncDisposable
+@inject WateringHubClient HubClient
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -14,3 +16,15 @@
         </article>
     </main>
 </div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await HubClient.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await HubClient.StopAsync();
+    }
+}

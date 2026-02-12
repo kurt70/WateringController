@@ -25,6 +25,10 @@
         <div class="col-12 col-md-4">
             <label class="form-label">Days</label>
             <div class="d-flex flex-wrap gap-2">
+                <label class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" @bind="AllNewDays" />
+                    <span class="form-check-label">All</span>
+                </label>
                 @for (var i = 0; i < DayTokens.Length; i++)
                 {
                     var index = i;
@@ -43,7 +47,7 @@
         </div>
     </div>
     <div class="mt-3 d-flex gap-2 align-items-center">
-        <button class="btn btn-primary" @onclick="CreateAsync" disabled="@_busy">Add</button>
+        <button class="btn btn-primary" @onclick="CreateAsync" disabled="@(_busy || !HasAnyDaySelected(_newDays))">Add</button>
         @if (!string.IsNullOrWhiteSpace(_message))
         {
             <span class="@(_messageIsError ? "text-danger" : "text-muted")">@_message</span>
@@ -113,6 +117,10 @@ else
                         @if (isEditing)
                         {
                             <div class="d-flex flex-wrap gap-2">
+                                <label class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" @bind="AllEditDays" />
+                                    <span class="form-check-label">All</span>
+                                </label>
                                 @for (var i = 0; i < DayTokens.Length; i++)
                                 {
                                     var index = i;
@@ -132,7 +140,7 @@ else
                     <td class="text-end">
                         @if (isEditing)
                         {
-                            <button class="btn btn-sm btn-success me-2" @onclick="() => SaveAsync(schedule.Id)" disabled="@_busy">Save</button>
+                            <button class="btn btn-sm btn-success me-2" @onclick="() => SaveAsync(schedule.Id)" disabled="@(_busy || !HasAnyDaySelected(_editDays))">Save</button>
                             <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
                         }
                         else
@@ -162,6 +170,17 @@ else
     private string? _message;
     private bool _messageIsError;
     private static readonly string[] DayTokens = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+    private bool AllNewDays
+    {
+        get => AreAllDaysSelected(_newDays);
+        set => SetAllDays(_newDays, value);
+    }
+
+    private bool AllEditDays
+    {
+        get => AreAllDaysSelected(_editDays);
+        set => SetAllDays(_editDays, value);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -683,5 +702,31 @@ else
         }
 
         return false;
+    }
+
+    private static bool AreAllDaysSelected(bool[] flags)
+    {
+        if (flags.Length == 0)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < flags.Length; i++)
+        {
+            if (!flags[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void SetAllDays(bool[] flags, bool value)
+    {
+        for (var i = 0; i < flags.Length; i++)
+        {
+            flags[i] = value;
+        }
     }
 }
