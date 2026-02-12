@@ -7,11 +7,13 @@ namespace WateringController.Frontend.Services;
 public sealed class WateringHubClient : IAsyncDisposable
 {
     private readonly NavigationManager _navigation;
+    private readonly FrontendTelemetryService _telemetry;
     private HubConnection? _connection;
 
-    public WateringHubClient(NavigationManager navigation)
+    public WateringHubClient(NavigationManager navigation, FrontendTelemetryService telemetry)
     {
         _navigation = navigation;
+        _telemetry = telemetry;
     }
 
     public event Action<WaterLevelUpdate>? WaterLevelUpdated;
@@ -31,21 +33,24 @@ public sealed class WateringHubClient : IAsyncDisposable
                 .WithAutomaticReconnect()
                 .Build();
 
-            _connection.Reconnected += _ =>
+            _connection.Reconnected += _connectionId =>
             {
                 ConnectionStateChanged?.Invoke(true);
+                _ = _telemetry.TrackEventAsync("frontend.signalr.reconnected");
                 return Task.CompletedTask;
             };
 
-            _connection.Reconnecting += _ =>
+            _connection.Reconnecting += _exception =>
             {
                 ConnectionStateChanged?.Invoke(false);
+                _ = _telemetry.TrackEventAsync("frontend.signalr.reconnecting");
                 return Task.CompletedTask;
             };
 
-            _connection.Closed += _ =>
+            _connection.Closed += _exception =>
             {
                 ConnectionStateChanged?.Invoke(false);
+                _ = _telemetry.TrackEventAsync("frontend.signalr.closed");
                 return Task.CompletedTask;
             };
 
@@ -70,8 +75,20 @@ public sealed class WateringHubClient : IAsyncDisposable
             return;
         }
 
-        await _connection.StartAsync();
-        ConnectionStateChanged?.Invoke(true);
+        try
+        {
+            await _connection.StartAsync();
+            ConnectionStateChanged?.Invoke(true);
+            await _telemetry.TrackEventAsync("frontend.signalr.connected");
+        }
+        catch (Exception ex)
+        {
+            await _telemetry.TrackEventAsync("frontend.signalr.connect_failed", new Dictionary<string, object?>
+            {
+                ["error"] = ex.Message
+            });
+            throw;
+        }
     }
 
     public async Task StopAsync()

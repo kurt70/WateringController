@@ -184,6 +184,8 @@ This layered approach prevents:
 | Water level unknown | Pump does not run |
 | ESP32 watchdog triggers | Pump stops |
 
+When the pump is already running, backend safety monitoring also issues an automatic stop command if water level becomes empty, stale, or unknown.
+
 ---
 
 ## 5. Scheduling Model

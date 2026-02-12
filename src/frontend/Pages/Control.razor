@@ -1,5 +1,6 @@
 @page "/control"
 @inject HttpClient Http
+@inject FrontendTelemetryService Telemetry
 
 <PageTitle>Control</PageTitle>
 
@@ -36,10 +37,20 @@
             _pumpMessage = response.IsSuccessStatusCode
                 ? "Pump start command sent."
                 : $"Failed to start pump ({(int)response.StatusCode}).";
+            await Telemetry.TrackEventAsync("frontend.control.pump_start", new Dictionary<string, object?>
+            {
+                ["runSeconds"] = _runSeconds,
+                ["httpStatus"] = (int)response.StatusCode,
+                ["success"] = response.IsSuccessStatusCode
+            });
         }
         catch (Exception ex)
         {
             _pumpMessage = $"Failed to start pump: {ex.Message}";
+            await Telemetry.TrackEventAsync("frontend.control.pump_start_error", new Dictionary<string, object?>
+            {
+                ["error"] = ex.Message
+            });
         }
         finally
         {
@@ -57,10 +68,19 @@
             _pumpMessage = response.IsSuccessStatusCode
                 ? "Pump stop command sent."
                 : $"Failed to stop pump ({(int)response.StatusCode}).";
+            await Telemetry.TrackEventAsync("frontend.control.pump_stop", new Dictionary<string, object?>
+            {
+                ["httpStatus"] = (int)response.StatusCode,
+                ["success"] = response.IsSuccessStatusCode
+            });
         }
         catch (Exception ex)
         {
             _pumpMessage = $"Failed to stop pump: {ex.Message}";
+            await Telemetry.TrackEventAsync("frontend.control.pump_stop_error", new Dictionary<string, object?>
+            {
+                ["error"] = ex.Message
+            });
         }
         finally
         {

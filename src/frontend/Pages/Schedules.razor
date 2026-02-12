@@ -1,6 +1,7 @@
 @page "/schedules"
 @inject HttpClient Http
 @inject IJSRuntime Js
+@inject FrontendTelemetryService Telemetry
 
 <PageTitle>Schedules</PageTitle>
 
@@ -231,6 +232,12 @@ else
                     : detail;
                 _messageIsError = true;
             }
+            await Telemetry.TrackEventAsync("frontend.schedules.create", new Dictionary<string, object?>
+            {
+                ["httpStatus"] = (int)response.StatusCode,
+                ["success"] = response.IsSuccessStatusCode,
+                ["runSeconds"] = _new.RunSeconds
+            });
         }
         finally
         {
@@ -305,6 +312,12 @@ else
                     : detail;
                 _messageIsError = true;
             }
+            await Telemetry.TrackEventAsync("frontend.schedules.update", new Dictionary<string, object?>
+            {
+                ["scheduleId"] = id,
+                ["httpStatus"] = (int)response.StatusCode,
+                ["success"] = response.IsSuccessStatusCode
+            });
         }
         finally
         {
@@ -333,6 +346,12 @@ else
                     : detail;
                 _messageIsError = true;
             }
+            await Telemetry.TrackEventAsync("frontend.schedules.delete", new Dictionary<string, object?>
+            {
+                ["scheduleId"] = id,
+                ["httpStatus"] = (int)response.StatusCode,
+                ["success"] = response.IsSuccessStatusCode
+            });
         }
         finally
         {
@@ -360,6 +379,13 @@ else
                     : detail;
                 _messageIsError = true;
             }
+            await Telemetry.TrackEventAsync("frontend.schedules.run_now", new Dictionary<string, object?>
+            {
+                ["scheduleId"] = schedule.Id,
+                ["httpStatus"] = (int)response.StatusCode,
+                ["success"] = response.IsSuccessStatusCode,
+                ["runSeconds"] = schedule.RunSeconds
+            });
         }
         finally
         {

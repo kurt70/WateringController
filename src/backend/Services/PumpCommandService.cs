@@ -98,6 +98,29 @@ public sealed class PumpCommandService
     }
 
     /// <summary>
+    /// Issues an automatic safety stop command regardless of water level.
+    /// </summary>
+    public async Task<PumpCommandResult> StopForSafetyAsync(string safetyReason, CancellationToken cancellationToken)
+    {
+        if (!_publisher.IsConnected)
+        {
+            return new PumpCommandResult(false, "MQTT broker is not connected.", null, "mqtt_disconnected");
+        }
+
+        var command = new PumpCommandRequest
+        {
+            Action = "stop",
+            RunSeconds = null,
+            Reason = $"safety_stop:{safetyReason}"
+        };
+
+        var payload = JsonSerializer.Serialize(command, JsonOptions);
+        _logger.LogWarning("Publishing automatic safety stop command: {Payload}", payload);
+        await _publisher.PublishAsync(_topics.PumpCommand, payload, retain: false, cancellationToken);
+        return new PumpCommandResult(true, null, command.RequestId, $"safety_stop:{safetyReason}");
+    }
+
+    /// <summary>
     /// Issues a scheduled start command if safety checks pass.
     /// </summary>
     public async Task<PumpCommandResult> StartScheduledAsync(int runSeconds, CancellationToken cancellationToken)

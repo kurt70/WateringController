@@ -18,12 +18,18 @@ public sealed class AlarmService
     private readonly IMqttPublisher _publisher;
     private readonly AlarmStore _store;
     private readonly MqttTopics _topics;
+    private readonly ILogger<AlarmService> _logger;
 
-    public AlarmService(IMqttPublisher publisher, AlarmStore store, MqttTopics topics)
+    public AlarmService(
+        IMqttPublisher publisher,
+        AlarmStore store,
+        MqttTopics topics,
+        ILogger<AlarmService> logger)
     {
         _publisher = publisher;
         _store = store;
         _topics = topics;
+        _logger = logger;
     }
 
     /// <summary>
@@ -40,6 +46,11 @@ public sealed class AlarmService
         };
 
         var json = JsonSerializer.Serialize(payload, JsonOptions);
+        _logger.LogWarning(
+            "Raising alarm: type={Type} severity={Severity} raisedAt={RaisedAt}.",
+            payload.Type,
+            payload.Severity,
+            payload.RaisedAt);
         await _publisher.PublishAsync(_topics.SystemAlarm, json, retain: true, cancellationToken);
 
         _store.Add(new SystemAlarmUpdate

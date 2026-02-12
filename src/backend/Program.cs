@@ -8,6 +8,8 @@ using System.Text.Json;
 using WateringController.Backend.Data;
 using WateringController.Backend.Options;
 using WateringController.Backend.Models;
+using WateringController.Backend.Telemetry;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 ApplyDatabaseOverrides(builder);
@@ -15,6 +17,25 @@ AppServiceRegistration.Register(builder);
 var app = builder.Build();
 
 app.UseCors("Frontend");
+
+app.Use(async (context, next) =>
+{
+    var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
+    var otelOptions = context.RequestServices.GetRequiredService<IOptions<OpenTelemetryOptions>>().Value;
+    var logger = loggerFactory.CreateLogger("RequestScope");
+
+    using (logger.BeginScope(new Dictionary<string, object?>
+    {
+        [TelemetryDimensions.Site] = otelOptions.Site,
+        [TelemetryDimensions.Component] = "backend",
+        [TelemetryDimensions.RequestId] = context.TraceIdentifier,
+        [TelemetryDimensions.Route] = context.Request.Path.Value
+    }))
+    {
+        await next();
+    }
+});
+
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
@@ -188,6 +209,92 @@ app.MapPost("/api/pump/stop", async (PumpCommandService service, CancellationTok
     return result.Success
         ? Results.Ok(result)
         : Results.Problem(result.Error, statusCode: StatusCodes.Status409Conflict);
+});
+
+// Receives frontend telemetry fallback events and logs them server-side.
+app.MapPost("/api/otel/client-event", async (HttpRequest request, FrontendTelemetryLogSink logSink, FrontendTelemetryTraceSink traceSink, IOptions<OpenTelemetryOptions> otelOptionsMonitor, CancellationToken cancellationToken) =>
+{
+    using var reader = new StreamReader(request.Body);
+    var body = await reader.ReadToEndAsync(cancellationToken);
+    var site = otelOptionsMonitor.Value.Site;
+
+    try
+    {
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var name = root.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String
+            ? nameElement.GetString() ?? "frontend.event"
+            : "frontend.event";
+
+        Dictionary<string, object?> attributes = new(StringComparer.Ordinal)
+        {
+            [TelemetryDimensions.Site] = site,
+            [TelemetryDimensions.Component] = "frontend",
+            [TelemetryDimensions.EventName] = name,
+            [TelemetryDimensions.EventSource] = "frontend"
+        };
+
+        if (root.TryGetProperty("attributes", out var attributesElement) && attributesElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in attributesElement.EnumerateObject())
+            {
+                attributes[property.Name] = property.Value.ValueKind switch
+                {
+                    JsonValueKind.String => property.Value.GetString(),
+                    JsonValueKind.Number => property.Value.TryGetInt64(out var l) ? l : property.Value.GetDouble(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => property.Value.ToString()
+                };
+            }
+        }
+
+        if (root.TryGetProperty("sentAt", out var sentAtElement) && sentAtElement.ValueKind == JsonValueKind.String)
+        {
+            attributes[TelemetryDimensions.SentAt] = sentAtElement.GetString();
+        }
+
+        logSink.LogEvent(name, attributes, body);
+        traceSink.TrackEvent(name, attributes);
+    }
+    catch
+    {
+        var attributes = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [TelemetryDimensions.Site] = site,
+            [TelemetryDimensions.Component] = "frontend",
+            [TelemetryDimensions.EventName] = "frontend.event.parse_error",
+            [TelemetryDimensions.EventSource] = "frontend"
+        };
+        logSink.LogEvent("frontend.event.parse_error", attributes, body);
+        traceSink.TrackEvent("frontend.event.parse_error", attributes);
+    }
+
+    return Results.Accepted();
+});
+
+// Same-origin proxy for browser OTLP traces to avoid CORS/preflight issues.
+app.MapPost("/api/otel/v1/traces", async (HttpRequest request, IHttpClientFactory httpClientFactory, IConfiguration configuration, CancellationToken cancellationToken) =>
+{
+    var target = configuration["OpenTelemetry:FrontendTraceProxyTarget"] ?? "http://localhost:4318/v1/traces";
+
+    using var ms = new MemoryStream();
+    await request.Body.CopyToAsync(ms, cancellationToken);
+    ms.Position = 0;
+
+    using var forwardRequest = new HttpRequestMessage(HttpMethod.Post, target)
+    {
+        Content = new ByteArrayContent(ms.ToArray())
+    };
+
+    if (!string.IsNullOrWhiteSpace(request.ContentType))
+    {
+        forwardRequest.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(request.ContentType);
+    }
+
+    using var client = httpClientFactory.CreateClient();
+    using var response = await client.SendAsync(forwardRequest, cancellationToken);
+    return Results.StatusCode((int)response.StatusCode);
 });
 
 if (app.Environment.IsDevelopment())

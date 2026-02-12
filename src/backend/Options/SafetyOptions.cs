@@ -8,4 +8,5 @@ public sealed class SafetyOptions
     public const string SectionName = "Safety";
 
     public int WaterLevelStaleMinutes { get; init; } = 10;
+    public int AutoStopCheckIntervalSeconds { get; init; } = 5;
 }

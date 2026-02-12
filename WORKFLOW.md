@@ -41,32 +41,32 @@
 - [!] Confirm topic prefix (Mqtt__TopicPrefix). Default is now `home/veranda`, producing `home/veranda/WateringController/...`.
 
 ## 4. Safety Gate Checks
-- [ ] Publish water level below threshold -> pump blocked (PumpCommandService enforces `<= 0%`).
-- [ ] Publish stale/unknown water level -> pump blocked (stale uses `Safety__WaterLevelStaleMinutes`).
-- [ ] Publish OK water level -> pump allowed.
+- [x] Publish water level below threshold -> pump blocked (verified 409 "Water level is empty.").
+- [x] Publish stale/unknown water level -> pump blocked (verified 409 "Water level is stale." and "Water level is unknown.").
+- [x] Publish OK water level -> pump allowed (verified 200 success + requestId).
 
 ## 5. Scheduling Validation
 - [x] Create schedule (API or UI) is implemented (CRUD endpoints + UI).
 - [ ] Observe schedule tick logs.
-- [ ] Verify run history recorded (RunHistoryRepository + UI surface exists).
+- [x] Verify run history recorded (verified scheduled run persisted for schedule id 22).
 - [x] Verify schedule runs only once per day is implemented (lastRunDateUtc check).
 
 ## 6. Manual Controls
 - [x] Manual start/stop endpoints implemented.
 - [x] Control UI implemented (`/control`).
-- [ ] Manual start blocked if unsafe (verify behavior).
-- [ ] Manual stop issues pump stop command (verify publish).
-- [ ] Manual start when safe results in pump cmd + state update (verify end-to-end).
+- [x] Manual start blocked if unsafe (verified 409 for empty/stale/unknown).
+- [x] Manual stop issues pump stop command (verified MQTT publish on `.../pump/cmd`).
+- [x] Manual start when safe results in pump cmd + state update (verified MQTT start command + `/api/pump/latest` update).
 
 ## 7. UI & SignalR
 - [x] UI wiring implemented for water level/pump state/alarms (SignalR + HTTP fallbacks).
 - [x] Connection status reflects SignalR disconnect/reconnect in UI.
-- [ ] Verify live updates end-to-end in browser.
+- [x] Verify live updates end-to-end in browser (manually confirmed with repeated live waterlevel+alarm updates).
 
 ## 8. Tests
-- [ ] Run backend unit tests (scheduling + safety).
+- [x] Run backend unit tests (scheduling + safety) - 69 passed.
 - [ ] Run firmware unit tests (PlatformIO native env) if applicable.
-- [ ] Run frontend E2E tests (Playwright).
+- [x] Run frontend E2E tests (Playwright) - 6 passed.
 
 ## 9. Firmware Build & Flash (USB)
 - [ ] Build + upload pump firmware (PlatformIO).
@@ -82,8 +82,8 @@
 
 ## 10. Docs & Cleanup
 - [x] Fix docs/mqtt.md code fences.
-- [!] Update docs/mqtt.md and WORKFLOW topic prefix to match code (topics are `{prefix}/WateringController/...`).
-- [ ] Update README if dev steps or environment info changed.
+- [x] Update docs/mqtt.md and WORKFLOW topic prefix to match code (topics are `{prefix}/WateringController/...`).
+- [x] Update README if dev steps or environment info changed.
 - [ ] Document test workflow updates (E2E + build-lock workaround).
 
 ---

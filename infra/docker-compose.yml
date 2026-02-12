@@ -7,6 +7,26 @@ services:
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    ports:
+      - "18888:18888"
+      - "4317:18889"
+      - "4318:18890"
+    environment:
+      - DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+
+  # otel-collector-azure:
+  #   image: otel/opentelemetry-collector-contrib:0.111.0
+  #   command: ["--config=/etc/otelcol/config.yaml"]
+  #   environment:
+  #     - APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=...
+  #   volumes:
+  #     - ./otel-collector-config.azure.yaml:/etc/otelcol/config.yaml:ro
+  #   ports:
+  #     - "4317:4317"
+  #     - "4318:4318"
+
   # app:
   #   build:
   #     context: ..

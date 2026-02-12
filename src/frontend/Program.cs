@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.JSInterop;
 using WateringController.Frontend;
 using WateringController.Frontend.Services;
 
@@ -9,5 +10,17 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddScoped<WateringHubClient>();
+builder.Services.AddScoped<FrontendTelemetryService>();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+var js = host.Services.GetRequiredService<IJSRuntime>();
+
+await js.InvokeVoidAsync("WateringTelemetry.start", new
+{
+    enabled = builder.Configuration.GetValue<bool>("OpenTelemetry:Enabled"),
+    serviceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "WateringController.Frontend",
+    otlpHttpEndpoint = builder.Configuration["OpenTelemetry:OtlpHttpEndpoint"] ?? "http://localhost:4318",
+    fallbackEndpoint = builder.Configuration["OpenTelemetry:FallbackEndpoint"] ?? "/api/otel/client-event"
+});
+
+await host.RunAsync();
