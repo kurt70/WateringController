@@ -250,6 +250,9 @@ _Pvt_Extensions
 # Firmware secrets
 infra/firmware/**/include/config.h
 
+# Local runtime data
+src/backend/watering.dev.db
+
 # Paket dependency manager
 .paket/paket.exe
 paket-files/
