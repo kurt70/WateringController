@@ -18,6 +18,7 @@ var js = host.Services.GetRequiredService<IJSRuntime>();
 await js.InvokeVoidAsync("WateringTelemetry.start", new
 {
     enabled = builder.Configuration.GetValue<bool>("OpenTelemetry:Enabled"),
+    useBrowserSdk = builder.Configuration.GetValue<bool>("OpenTelemetry:UseBrowserSdk"),
     serviceName = builder.Configuration["OpenTelemetry:ServiceName"] ?? "WateringController.Frontend",
     otlpHttpEndpoint = builder.Configuration["OpenTelemetry:OtlpHttpEndpoint"] ?? "http://localhost:4318",
     fallbackEndpoint = builder.Configuration["OpenTelemetry:FallbackEndpoint"] ?? "/api/otel/client-event"

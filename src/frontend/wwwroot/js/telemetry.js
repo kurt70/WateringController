@@ -2,7 +2,19 @@ window.WateringTelemetry = {
   _tracer: null,
   _fallbackEndpoint: "/api/otel/client-event",
   start: async function (config) {
-    if (!config || !config.enabled) {
+    if (!config) {
+      return;
+    }
+
+    if (config.fallbackEndpoint) {
+      window.WateringTelemetry._fallbackEndpoint = config.fallbackEndpoint;
+    }
+
+    if (!config.enabled) {
+      return;
+    }
+
+    if (!config.useBrowserSdk) {
       return;
     }
 
@@ -27,9 +39,6 @@ window.WateringTelemetry = {
 
       const serviceName = config.serviceName || "WateringController.Frontend";
       const endpointBase = (config.otlpHttpEndpoint || "http://localhost:4318").replace(/\/$/, "");
-      if (config.fallbackEndpoint) {
-        window.WateringTelemetry._fallbackEndpoint = config.fallbackEndpoint;
-      }
 
       const resource = new resourcesPkg.Resource({
         [semconvPkg.SemanticResourceAttributes.SERVICE_NAME]: serviceName
@@ -58,7 +67,7 @@ window.WateringTelemetry = {
       const startupSpan = tracer.startSpan("frontend.startup");
       startupSpan.end();
     } catch (error) {
-      console.warn("OpenTelemetry frontend bootstrap failed.", error);
+      console.info("OpenTelemetry browser SDK unavailable; using relay mode.", error);
       window.WateringTelemetry._postFallback("frontend.otel.bootstrap_failed", {
         error: String(error)
       });
