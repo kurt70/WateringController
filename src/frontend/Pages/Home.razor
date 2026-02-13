@@ -14,47 +14,63 @@
             <table class="table table-sm mb-0 align-middle">
                 <tbody>
                     <tr>
-                        <td class="text-start">SignalR</td>
+                        <td class="text-start">
+                            <span class="conn-type-label">
+                                <span class="conn-type-icon signalr" aria-hidden="true"></span>
+                                SignalR
+                            </span>
+                        </td>
                         @{
                             var signalrStatus = HubClient.IsConnected ? "connected" : "disconnected";
                         }
                         <td class="text-center">
-                            <span class="status-icon @GetStatusClass(signalrStatus)" aria-hidden="true"></span>
+                            <span class="state-icon @GetStateIconClass(signalrStatus)" aria-hidden="true"></span>
                         </td>
-                        <td class="text-start @GetStatusClass(signalrStatus)">@signalrStatus</td>
                         <td class="text-end text-muted">@GetLastSeenText(_lastSignalrChange)</td>
                     </tr>
                     <tr>
-                        <td class="text-start">MQTT Broker</td>
+                        <td class="text-start">
+                            <span class="conn-type-label">
+                                <span class="conn-type-icon mqtt" aria-hidden="true"></span>
+                                MQTT Broker
+                            </span>
+                        </td>
                         @{
                             var mqttStatus = GetMqttStatusText();
                         }
                         <td class="text-center">
-                            <span class="status-icon @GetStatusClass(mqttStatus)" aria-hidden="true"></span>
+                            <span class="state-icon @GetStateIconClass(mqttStatus)" aria-hidden="true"></span>
                         </td>
-                        <td class="text-start @GetStatusClass(mqttStatus)">@mqttStatus</td>
                         <td class="text-end text-muted">@GetLastSeenText(_health?.Mqtt?.LastConnectedAt)</td>
                     </tr>
                     <tr>
-                        <td class="text-start">Pump Controller</td>
+                        <td class="text-start">
+                            <span class="conn-type-label">
+                                <span class="conn-type-icon pump" aria-hidden="true"></span>
+                                Pump Controller
+                            </span>
+                        </td>
                         @{
                             var pumpStatus = GetDeviceStatusText(_pumpState?.ReceivedAt);
                         }
                         <td class="text-center">
-                            <span class="status-icon @GetStatusClass(pumpStatus)" aria-hidden="true"></span>
+                            <span class="state-icon @GetStateIconClass(pumpStatus)" aria-hidden="true"></span>
                         </td>
-                        <td class="text-start @GetStatusClass(pumpStatus)">@pumpStatus</td>
                         <td class="text-end text-muted">@GetLastSeenText(_pumpState?.ReceivedAt)</td>
                     </tr>
                     <tr>
-                        <td class="text-start">Water Level Controller</td>
+                        <td class="text-start">
+                            <span class="conn-type-label">
+                                <span class="conn-type-icon waterlevel" aria-hidden="true"></span>
+                                Water Level Controller
+                            </span>
+                        </td>
                         @{
                             var waterStatus = GetDeviceStatusText(_latest?.ReceivedAt);
                         }
                         <td class="text-center">
-                            <span class="status-icon @GetStatusClass(waterStatus)" aria-hidden="true"></span>
+                            <span class="state-icon @GetStateIconClass(waterStatus)" aria-hidden="true"></span>
                         </td>
-                        <td class="text-start @GetStatusClass(waterStatus)">@waterStatus</td>
                         <td class="text-end text-muted">@GetLastSeenText(_latest?.ReceivedAt)</td>
                     </tr>
                 </tbody>
@@ -365,6 +381,18 @@
             "stale" => "status-chip warn",
             "disconnected" => "status-chip bad",
             _ => "status-chip unknown"
+        };
+    }
+
+    private static string GetStateIconClass(string status)
+    {
+        return status switch
+        {
+            "connected" => "ok",
+            "online" => "ok",
+            "stale" => "warn",
+            "disconnected" => "bad",
+            _ => "unknown"
         };
     }
 
