@@ -1,0 +1,1 @@
+- Decision: normalized Home.razor water level display to a shared `waterLevelPercent` local so the refreshed summary and metric UI keep the same text without Razor pattern-variable scope collisions.

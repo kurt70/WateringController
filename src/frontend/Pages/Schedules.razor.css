@@ -1,0 +1,41 @@
+.schedule-metric-grid {
+    margin-bottom: 1.5rem;
+}
+
+.schedule-builder__note {
+    margin-bottom: 1rem;
+    max-width: 52rem;
+}
+
+.schedule-table-shell__header {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    margin-bottom: 0.25rem;
+}
+
+.schedule-table-shell .table-responsive {
+    padding: 0 0.5rem 0.5rem;
+}
+
+.schedule-table-shell .table {
+    margin-bottom: 0;
+}
+
+.table thead th {
+    color: #60708a;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+.table tbody td {
+    vertical-align: middle;
+    border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 640.98px) {
+    .schedule-table-shell .table-responsive {
+        padding-left: 0;
+        padding-right: 0;
+    }
+}

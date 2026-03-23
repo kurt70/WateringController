@@ -270,3 +270,7 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+# Squad: shared repo state lives under .squad; ignore only machine-local artifacts
+.squad/sessions/
+# Squad: SubSquad activation file (local to this machine)
+.squad-workstream

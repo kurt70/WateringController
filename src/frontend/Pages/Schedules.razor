@@ -5,10 +5,47 @@
 
 <PageTitle>Schedules</PageTitle>
 
-<h1>Schedules</h1>
+@{
+    var enabledCount = _schedules.Count(schedule => schedule.Enabled);
+    var disabledCount = _schedules.Count - enabledCount;
+    var totalEnabledRunSeconds = _schedules.Where(schedule => schedule.Enabled).Sum(schedule => schedule.RunSeconds);
+}
 
-<div class="card p-3 mb-3">
-    <h5>Add schedule</h5>
+<div class="page-header">
+    <div class="page-header__copy">
+        <div class="page-header__eyebrow">Automation</div>
+        <h1>Schedules</h1>
+        <p>Create and adjust recurring watering windows. Times are entered in local time and converted to UTC before saving.</p>
+    </div>
+</div>
+
+<div class="metric-grid schedule-metric-grid">
+    <div class="metric-card metric-card--schedule">
+        <div class="metric-card__label">Total schedules</div>
+        <div class="metric-card__value">@_schedules.Count</div>
+        <div class="metric-card__meta">All configured recurring watering windows</div>
+    </div>
+    <div class="metric-card metric-card--clear">
+        <div class="metric-card__label">Enabled</div>
+        <div class="metric-card__value">@enabledCount</div>
+        <div class="metric-card__meta">Ready to run when their local time matches</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-card__label">Disabled</div>
+        <div class="metric-card__value">@disabledCount</div>
+        <div class="metric-card__meta">Kept for later without deleting the entry</div>
+    </div>
+    <div class="metric-card metric-card--water">
+        <div class="metric-card__label">Enabled runtime</div>
+        <div class="metric-card__value">@totalEnabledRunSeconds s</div>
+        <div class="metric-card__meta">Combined requested duration across enabled schedules</div>
+    </div>
+</div>
+
+<div class="panel-card p-4 mb-4 schedule-builder">
+    <div class="eyebrow-label mb-2">New schedule</div>
+    <h5 class="section-title">Add schedule</h5>
+    <p class="muted-note schedule-builder__note">Local times are converted to UTC before saving so the backend can execute against a consistent schedule source.</p>
     <div class="row g-2">
         <div class="col-12 col-md-3">
             <label class="form-label">
@@ -47,23 +84,31 @@
             </div>
         </div>
     </div>
-    <div class="mt-3 d-flex gap-2 align-items-center">
+    <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
         <button class="btn btn-primary" @onclick="CreateAsync" disabled="@(_busy || !HasAnyDaySelected(_newDays))">Add</button>
         @if (!string.IsNullOrWhiteSpace(_message))
         {
-            <span class="@(_messageIsError ? "text-danger" : "text-muted")">@_message</span>
+            <div class="status-banner @(_messageIsError ? "error" : "success")">@_message</div>
         }
     </div>
 </div>
 
 @if (_schedules.Count == 0)
 {
-    <p>No schedules.</p>
+    <div class="panel-card p-4 empty-state">No schedules yet. Add your first recurring watering window above.</div>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table align-middle">
+    <div class="panel-card p-3 schedule-table-shell">
+        <div class="schedule-table-shell__header px-2 pt-2 pb-3">
+            <div>
+                <div class="eyebrow-label mb-2">Current plan</div>
+                <h5 class="section-title mb-1">Configured schedules</h5>
+                <p class="muted-note mb-0">Run now uses the same backend safety checks as manual control.</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle">
             <thead>
             <tr>
                 <th>Enabled</th>
@@ -154,7 +199,8 @@ else
                 </tr>
             }
             </tbody>
-        </table>
+            </table>
+        </div>
     </div>
 }
 

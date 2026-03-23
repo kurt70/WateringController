@@ -4,39 +4,102 @@
 
 <PageTitle>Control</PageTitle>
 
-<h1>Control</h1>
+<div class="page-header">
+    <div class="page-header__copy">
+        <div class="page-header__eyebrow">Manual control</div>
+        <h1>Pump control</h1>
+        <p>Manually start or stop the pump. Safety checks still run in the backend before a start command is accepted.</p>
+    </div>
+</div>
 
-<div class="card p-3 mb-3">
-    <h5>Manual Pump Control</h5>
-    <div class="input-group mb-2">
-        <span class="input-group-text">Run seconds</span>
-        <input class="form-control" type="number" min="1" step="1" @bind="_runSeconds" />
+<div class="row g-3">
+    <div class="col-12 col-xl-7">
+        <div class="panel-card p-4 control-shell h-100">
+            <div class="control-shell__header">
+                <div>
+                    <div class="eyebrow-label mb-2">Run duration</div>
+                    <h5 class="section-title mb-1">Manual watering window</h5>
+                    <p class="muted-note mb-0">Choose a runtime, then send a start or stop command. The backend still decides whether the action is safe.</p>
+                </div>
+                <div class="control-duration">
+                    <div class="control-duration__value">@_runSeconds</div>
+                    <div class="control-duration__unit">seconds</div>
+                </div>
+            </div>
+
+            <div class="input-group input-group-lg">
+                <span class="input-group-text">Seconds</span>
+                <input class="form-control" type="number" min="1" step="1" @bind="_runSeconds" />
+            </div>
+
+            <div class="control-actions">
+                <button class="btn btn-primary btn-lg" @onclick="StartPumpAsync" disabled="@_isBusy">Start pump</button>
+                <button class="btn btn-outline-danger btn-lg" @onclick="StopPumpAsync" disabled="@_isBusy">Stop pump</button>
+            </div>
+
+            <div class="muted-note">Manual start requests are blocked when water level is unsafe, unknown, or stale.</div>
+
+            @if (_isBusy)
+            {
+                <div class="status-banner info">Sending command…</div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_pumpMessage))
+            {
+                <div class="status-banner @(_pumpMessageIsError ? "error" : "success")">@_pumpMessage</div>
+            }
+        </div>
     </div>
-    <div class="d-flex gap-2">
-        <button class="btn btn-primary" @onclick="StartPumpAsync" disabled="@_isBusy">Start</button>
-        <button class="btn btn-danger" @onclick="StopPumpAsync" disabled="@_isBusy">Stop</button>
+
+    <div class="col-12 col-xl-5">
+        <div class="panel-card p-4 h-100 control-guidance">
+            <div class="eyebrow-label mb-2">Safety gate</div>
+            <h5 class="section-title">Before you send a command</h5>
+            <ul class="control-checklist">
+                <li>
+                    <span>1</span>
+                    <div>Confirm the reservoir has a recent safe reading.</div>
+                </li>
+                <li>
+                    <span>2</span>
+                    <div>Use a short preset first when testing a newly primed line.</div>
+                </li>
+                <li>
+                    <span>3</span>
+                    <div>Stop immediately if the pump state does not match the command you sent.</div>
+                </li>
+            </ul>
+
+            <div>
+                <div class="eyebrow-label mb-2">Quick presets</div>
+                <div class="control-preset-stack">
+                    <button class="btn @(_runSeconds == 30 ? "btn-primary" : "btn-outline-secondary")" type="button" @onclick="() => SetRunSeconds(30)" disabled="@_isBusy">30s quick prime</button>
+                    <button class="btn @(_runSeconds == 60 ? "btn-primary" : "btn-outline-secondary")" type="button" @onclick="() => SetRunSeconds(60)" disabled="@_isBusy">60s standard run</button>
+                    <button class="btn @(_runSeconds == 120 ? "btn-primary" : "btn-outline-secondary")" type="button" @onclick="() => SetRunSeconds(120)" disabled="@_isBusy">120s deep soak</button>
+                </div>
+            </div>
+        </div>
     </div>
-    @if (!string.IsNullOrWhiteSpace(_pumpMessage))
-    {
-        <div class="mt-2">@_pumpMessage</div>
-    }
 </div>
 
 @code {
     private int _runSeconds = 30;
     private string? _pumpMessage;
+    private bool _pumpMessageIsError;
     private bool _isBusy;
 
     private async Task StartPumpAsync()
     {
         _isBusy = true;
         _pumpMessage = null;
+        _pumpMessageIsError = false;
         try
         {
             var response = await Http.PostAsJsonAsync("/api/pump/start", new { runSeconds = _runSeconds });
             _pumpMessage = response.IsSuccessStatusCode
                 ? "Pump start command sent."
                 : $"Failed to start pump ({(int)response.StatusCode}).";
+            _pumpMessageIsError = !response.IsSuccessStatusCode;
             await Telemetry.TrackEventAsync("frontend.control.pump_start", new Dictionary<string, object?>
             {
                 ["runSeconds"] = _runSeconds,
@@ -47,6 +110,7 @@
         catch (Exception ex)
         {
             _pumpMessage = $"Failed to start pump: {ex.Message}";
+            _pumpMessageIsError = true;
             await Telemetry.TrackEventAsync("frontend.control.pump_start_error", new Dictionary<string, object?>
             {
                 ["error"] = ex.Message
@@ -62,12 +126,14 @@
     {
         _isBusy = true;
         _pumpMessage = null;
+        _pumpMessageIsError = false;
         try
         {
             var response = await Http.PostAsync("/api/pump/stop", null);
             _pumpMessage = response.IsSuccessStatusCode
                 ? "Pump stop command sent."
                 : $"Failed to stop pump ({(int)response.StatusCode}).";
+            _pumpMessageIsError = !response.IsSuccessStatusCode;
             await Telemetry.TrackEventAsync("frontend.control.pump_stop", new Dictionary<string, object?>
             {
                 ["httpStatus"] = (int)response.StatusCode,
@@ -77,6 +143,7 @@
         catch (Exception ex)
         {
             _pumpMessage = $"Failed to stop pump: {ex.Message}";
+            _pumpMessageIsError = true;
             await Telemetry.TrackEventAsync("frontend.control.pump_stop_error", new Dictionary<string, object?>
             {
                 ["error"] = ex.Message
@@ -86,5 +153,10 @@
         {
             _isBusy = false;
         }
+    }
+
+    private void SetRunSeconds(int runSeconds)
+    {
+        _runSeconds = runSeconds;
     }
 }

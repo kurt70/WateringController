@@ -8,11 +8,25 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row">
+            <div class="top-row__panel">
+                <div class="top-row__identity">
+                    <div class="top-row__eyebrow">Watering Controller</div>
+                    <div class="top-row__title">Control center</div>
+                </div>
+                <div class="top-row__summary">
+                    Monitor live reservoir status, send manual pump commands, and keep recurring watering windows aligned.
+                </div>
+            </div>
+            <div class="top-row__status">
+                <span class="status-chip @(HubClient.IsConnected ? "ok" : "warn")">
+                    @(HubClient.IsConnected ? "Live updates connected" : "Live updates reconnecting")
+                </span>
+                <span class="top-row__status-note">Backend-served dashboard</span>
+            </div>
         </div>
 
-        <article class="content px-4">
+        <article class="content">
             @Body
         </article>
     </main>
@@ -21,6 +35,8 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
+        HubClient.ConnectionStateChanged += HandleConnectionStateChanged;
+
         try
         {
             await HubClient.StartAsync();
@@ -32,8 +48,14 @@
         }
     }
 
+    private void HandleConnectionStateChanged(bool isConnected)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     public async ValueTask DisposeAsync()
     {
+        HubClient.ConnectionStateChanged -= HandleConnectionStateChanged;
         await HubClient.StopAsync();
     }
 }

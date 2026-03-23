@@ -5,88 +5,142 @@
 
 <PageTitle>Status</PageTitle>
 
-<h1>Status</h1>
+@{
+    var signalrStatus = HubClient.IsConnected ? "connected" : "disconnected";
+    var mqttStatus = GetMqttStatusText();
+    var pumpStatus = GetDeviceStatusText(_pumpState?.ReceivedAt);
+    var waterStatus = GetDeviceStatusText(_latest?.ReceivedAt);
+    var waterLevelPercent = _latest?.LevelPercent;
+    var waterLevelSummary = waterLevelPercent switch
+    {
+        <= 15 => "Critical reserve",
+        <= 40 => "Watch reservoir",
+        int _ => "Healthy reserve",
+        null => "Awaiting telemetry"
+    };
+    var pumpModeSummary = _pumpState?.Running == true ? "Irrigating now" : "Standing by";
+}
+
+<div class="page-header">
+    <div class="page-header__copy">
+        <div class="page-header__eyebrow">Overview</div>
+        <h1>System status</h1>
+        <p>Track live connectivity, water level, pump state, alarms, and the next scheduled run from a single dashboard.</p>
+    </div>
+    <div class="status-chip @GetStatusClass(signalrStatus)">SignalR @signalrStatus</div>
+</div>
+
+<div class="dashboard-hero panel-card p-4 mb-4">
+    <div class="dashboard-hero__copy">
+        <div class="page-header__eyebrow">Operations snapshot</div>
+        <h2>Everything important at a glance</h2>
+        <p>Use the dashboard for live health, jump into manual control for immediate actions, or adjust schedules before the next watering window.</p>
+    </div>
+    <div class="dashboard-hero__stats">
+        <div class="dashboard-hero__stat">
+            <span class="eyebrow-label">Reservoir</span>
+            <strong>@waterLevelSummary</strong>
+            <span>@(waterLevelPercent.HasValue ? $"{waterLevelPercent.Value}% available" : "Waiting for the latest level update")</span>
+        </div>
+        <div class="dashboard-hero__stat">
+            <span class="eyebrow-label">Pump mode</span>
+            <strong>@pumpModeSummary</strong>
+            <span>@(_pumpState?.Running == true ? "Stop from the Control page if needed." : "Ready for the next accepted command.")</span>
+        </div>
+    </div>
+    <div class="dashboard-hero__actions">
+        <a class="btn btn-primary btn-lg" href="control">Open control</a>
+        <a class="btn btn-outline-primary btn-lg" href="schedules">Manage schedules</a>
+    </div>
+</div>
+
+<div class="metric-grid">
+    <div class="metric-card metric-card--water">
+        <div class="metric-card__label">Water level</div>
+        <div class="metric-card__value">@(waterLevelPercent.HasValue ? $"{waterLevelPercent.Value}%" : "No data")</div>
+        <div class="metric-card__meta">@GetLastSeenText(_latest?.ReceivedAt)</div>
+    </div>
+    <div class="metric-card metric-card--pump">
+        <div class="metric-card__label">Pump</div>
+        <div class="metric-card__value">@(_pumpState?.Running == true ? "Running" : "Stopped")</div>
+        <div class="metric-card__meta">Last update @GetLastSeenText(_pumpState?.ReceivedAt)</div>
+    </div>
+    <div class="metric-card metric-card--schedule">
+        <div class="metric-card__label">Next schedule</div>
+        <div class="metric-card__value">@(_nextScheduleAt.HasValue ? _nextScheduleAt.Value.ToLocalTime().ToString("HH:mm") : "None")</div>
+        <div class="metric-card__meta">@(_nextScheduleAt.HasValue ? GetLastSeenText(_nextScheduleAt) : "No upcoming schedules")</div>
+    </div>
+    <div class="metric-card @(_alarms.Count == 0 ? "metric-card--clear" : "metric-card--alert")">
+        <div class="metric-card__label">Active alarms</div>
+        <div class="metric-card__value">@_alarms.Count</div>
+        <div class="metric-card__meta">@(_alarms.Count == 0 ? "System clear" : "Review latest alarms below")</div>
+    </div>
+</div>
 
 <div class="row g-3">
     <div class="col-12 col-lg-6">
-        <div class="card p-3 h-100">
-            <h5>Connections</h5>
-            <table class="table table-sm mb-0 align-middle">
-                <tbody>
-                    <tr>
-                        <td class="text-start">
-                            <span class="conn-type-label">
-                                <span class="conn-type-icon signalr" aria-hidden="true"></span>
-                                SignalR
-                            </span>
-                        </td>
-                        @{
-                            var signalrStatus = HubClient.IsConnected ? "connected" : "disconnected";
-                        }
-                        <td class="text-center">
-                            <span class="state-icon @GetStateIconClass(signalrStatus)" aria-hidden="true"></span>
-                        </td>
-                        <td class="text-end text-muted">@GetLastSeenText(_lastSignalrChange)</td>
-                    </tr>
-                    <tr>
-                        <td class="text-start">
-                            <span class="conn-type-label">
-                                <span class="conn-type-icon mqtt" aria-hidden="true"></span>
-                                MQTT Broker
-                            </span>
-                        </td>
-                        @{
-                            var mqttStatus = GetMqttStatusText();
-                        }
-                        <td class="text-center">
-                            <span class="state-icon @GetStateIconClass(mqttStatus)" aria-hidden="true"></span>
-                        </td>
-                        <td class="text-end text-muted">@GetLastSeenText(_health?.Mqtt?.LastConnectedAt)</td>
-                    </tr>
-                    <tr>
-                        <td class="text-start">
-                            <span class="conn-type-label">
-                                <span class="conn-type-icon pump" aria-hidden="true"></span>
-                                Pump Controller
-                            </span>
-                        </td>
-                        @{
-                            var pumpStatus = GetDeviceStatusText(_pumpState?.ReceivedAt);
-                        }
-                        <td class="text-center">
-                            <span class="state-icon @GetStateIconClass(pumpStatus)" aria-hidden="true"></span>
-                        </td>
-                        <td class="text-end text-muted">@GetLastSeenText(_pumpState?.ReceivedAt)</td>
-                    </tr>
-                    <tr>
-                        <td class="text-start">
-                            <span class="conn-type-label">
-                                <span class="conn-type-icon waterlevel" aria-hidden="true"></span>
-                                Water Level Controller
-                            </span>
-                        </td>
-                        @{
-                            var waterStatus = GetDeviceStatusText(_latest?.ReceivedAt);
-                        }
-                        <td class="text-center">
-                            <span class="state-icon @GetStateIconClass(waterStatus)" aria-hidden="true"></span>
-                        </td>
-                        <td class="text-end text-muted">@GetLastSeenText(_latest?.ReceivedAt)</td>
-                    </tr>
-                </tbody>
-            </table>
-            <div class="text-muted small mt-2">
+        <div class="panel-card p-4 h-100">
+            <div class="eyebrow-label mb-2">Connectivity</div>
+            <h5 class="section-title">Live connections</h5>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="conn-type-label">
+                        <span class="conn-type-icon signalr" aria-hidden="true"></span>
+                        SignalR
+                    </div>
+                    <div class="status-right">
+                        <span class="state-icon @GetStateIconClass(signalrStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(signalrStatus)">@signalrStatus</span>
+                        <span class="status-time">@GetLastSeenText(_lastSignalrChange)</span>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="conn-type-label">
+                        <span class="conn-type-icon mqtt" aria-hidden="true"></span>
+                        MQTT Broker
+                    </div>
+                    <div class="status-right">
+                        <span class="state-icon @GetStateIconClass(mqttStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(mqttStatus)">@mqttStatus</span>
+                        <span class="status-time">@GetLastSeenText(_health?.Mqtt?.LastConnectedAt)</span>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="conn-type-label">
+                        <span class="conn-type-icon pump" aria-hidden="true"></span>
+                        Pump Controller
+                    </div>
+                    <div class="status-right">
+                        <span class="state-icon @GetStateIconClass(pumpStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(pumpStatus)">@pumpStatus</span>
+                        <span class="status-time">@GetLastSeenText(_pumpState?.ReceivedAt)</span>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="conn-type-label">
+                        <span class="conn-type-icon waterlevel" aria-hidden="true"></span>
+                        Water Level Controller
+                    </div>
+                    <div class="status-right">
+                        <span class="state-icon @GetStateIconClass(waterStatus)" aria-hidden="true"></span>
+                        <span class="@GetStatusClass(waterStatus)">@waterStatus</span>
+                        <span class="status-time">@GetLastSeenText(_latest?.ReceivedAt)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="muted-note mt-3">
                 Device status uses latest received MQTT message timestamps.
             </div>
         </div>
     </div>
 
     <div class="col-12 col-lg-6">
-        <div class="card p-3 h-100">
-            <h5>Water Level</h5>
+        <div class="panel-card p-4 h-100">
+            <div class="eyebrow-label mb-2">Reservoir</div>
+            <h5 class="section-title">Water level</h5>
             @if (_latest is null)
             {
-                <p>No water level updates yet.</p>
+                <div class="empty-state">No water level updates yet.</div>
             }
             else
             {
@@ -95,52 +149,95 @@
                         <div class="water-fill" style="height:@_latest.LevelPercent%"></div>
                         <div class="water-label">@_latest.LevelPercent%</div>
                     </div>
-                    <div class="water-meta">
-                        <div><strong>Sensors:</strong> @string.Join(", ", _latest.Sensors.Select(value => value ? "1" : "0"))</div>
-                        <div><strong>Measured:</strong> @_latest.MeasuredAt.ToString("u")</div>
-                        <div><strong>Reported:</strong> @_latest.ReportedAt.ToString("u")</div>
-                        <div><strong>Received:</strong> @_latest.ReceivedAt.ToString("u")</div>
-                    </div>
+                    <dl class="value-list flex-grow-1 mb-0">
+                        <div class="value-list__item">
+                            <dt>Sensors</dt>
+                            <dd>@string.Join(", ", _latest.Sensors.Select(value => value ? "1" : "0"))</dd>
+                        </div>
+                        <div class="value-list__item">
+                            <dt>Measured</dt>
+                            <dd>@FormatTimestamp(_latest.MeasuredAt)</dd>
+                        </div>
+                        <div class="value-list__item">
+                            <dt>Reported</dt>
+                            <dd>@FormatTimestamp(_latest.ReportedAt)</dd>
+                        </div>
+                        <div class="value-list__item">
+                            <dt>Received</dt>
+                            <dd>@FormatTimestamp(_latest.ReceivedAt)</dd>
+                        </div>
+                    </dl>
                 </div>
             }
         </div>
     </div>
 
     <div class="col-12 col-lg-6">
-        <div class="card p-3 h-100">
-            <h5>Pump State</h5>
+        <div class="panel-card p-4 h-100">
+            <div class="eyebrow-label mb-2">Pump</div>
+            <h5 class="section-title">Pump state</h5>
             @if (_pumpState is null)
             {
-                <p>No pump state updates yet.</p>
+                <div class="empty-state">No pump state updates yet.</div>
             }
             else
             {
-                <div><strong>Running:</strong> @(_pumpState.Running ? "yes" : "no")</div>
-                <div><strong>Since:</strong> @_pumpState.Since?.ToString("u")</div>
-                <div><strong>Last run seconds:</strong> @_pumpState.LastRunSeconds</div>
-                <div><strong>Last request id:</strong> @_pumpState.LastRequestId</div>
-                <div><strong>Reported:</strong> @_pumpState.ReportedAt.ToString("u")</div>
-                <div><strong>Received:</strong> @_pumpState.ReceivedAt.ToString("u")</div>
+                <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+                    <div>
+                        <div class="eyebrow-label">Current state</div>
+                        <div class="metric-card__value">@(_pumpState.Running ? "Running" : "Stopped")</div>
+                    </div>
+                    <span class="status-chip @(_pumpState.Running ? "ok" : "unknown")">
+                        @(_pumpState.Running ? "Active" : "Idle")
+                    </span>
+                </div>
+                <dl class="value-list mb-0">
+                    <div class="value-list__item">
+                        <dt>Since</dt>
+                        <dd>@FormatTimestamp(_pumpState.Since)</dd>
+                    </div>
+                    <div class="value-list__item">
+                        <dt>Last run seconds</dt>
+                        <dd>@_pumpState.LastRunSeconds</dd>
+                    </div>
+                    <div class="value-list__item">
+                        <dt>Last request id</dt>
+                        <dd>@(_pumpState.LastRequestId ?? "—")</dd>
+                    </div>
+                    <div class="value-list__item">
+                        <dt>Reported</dt>
+                        <dd>@FormatTimestamp(_pumpState.ReportedAt)</dd>
+                    </div>
+                    <div class="value-list__item">
+                        <dt>Received</dt>
+                        <dd>@FormatTimestamp(_pumpState.ReceivedAt)</dd>
+                    </div>
+                </dl>
             }
         </div>
     </div>
 
     <div class="col-12 col-lg-6">
-        <div class="card p-3 h-100">
-            <h5>Alarms</h5>
+        <div class="panel-card p-4 h-100">
+            <div class="eyebrow-label mb-2">Alerts</div>
+            <h5 class="section-title">Recent alarms</h5>
             @if (_alarms.Count == 0)
             {
-                <p>No alarms.</p>
+                <div class="empty-state">No alarms. The system has not reported recent safety or runtime issues.</div>
             }
             else
             {
                 <ul class="list-group">
                     @foreach (var alarm in _alarms)
                     {
-                        <li class="list-group-item">
-                            <strong>@alarm.Type</strong> (@alarm.Severity) - @alarm.Message
+                        <li class="list-group-item d-flex flex-column gap-2">
+                            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                                <strong>@alarm.Type</strong>
+                                <span class="status-chip @GetAlarmClass(alarm.Severity)">@alarm.Severity</span>
+                            </div>
+                            <div>@alarm.Message</div>
                             <div class="text-muted small">
-                                @alarm.RaisedAt.ToString("u") (@GetLastSeenText(alarm.RaisedAt))
+                                @FormatTimestamp(alarm.RaisedAt) (@GetLastSeenText(alarm.RaisedAt))
                             </div>
                         </li>
                     }
@@ -150,30 +247,39 @@
     </div>
 
     <div class="col-12 col-lg-6">
-        <div class="card p-3 h-100">
-            <h5>Scheduling</h5>
+        <div class="panel-card p-4 h-100">
+            <div class="eyebrow-label mb-2">Automation</div>
+            <h5 class="section-title">Scheduling</h5>
             @if (_nextScheduleAt is null)
             {
-                <div class="text-muted">No upcoming schedules.</div>
+                <div class="empty-state">No upcoming schedules.</div>
             }
             else
             {
-                <div><strong>Next:</strong> @_nextScheduleAt.Value.ToLocalTime().ToString("ddd yyyy-MM-dd HH:mm:ss") (@GetLastSeenText(_nextScheduleAt))</div>
-                <div><strong>Duration:</strong> @_nextSchedule?.RunSeconds s</div>
+                <dl class="value-list mb-0">
+                    <div class="value-list__item">
+                        <dt>Next run</dt>
+                        <dd>@FormatTimestamp(_nextScheduleAt) (@GetLastSeenText(_nextScheduleAt))</dd>
+                    </div>
+                    <div class="value-list__item">
+                        <dt>Duration</dt>
+                        <dd>@_nextSchedule?.RunSeconds s</dd>
+                    </div>
+                </dl>
             }
 
             @if (_recentRuns.Count == 0)
             {
-                <p class="mt-3">No scheduled runs yet.</p>
+                <div class="empty-state mt-3">No scheduled runs yet.</div>
             }
             else
             {
-                <div class="mt-3"><strong>Recent runs</strong></div>
+                <div class="mt-4 mb-2"><strong>Recent runs</strong></div>
                 <ul class="list-group">
                     @foreach (var run in _recentRuns.Take(3))
                     {
                         <li class="list-group-item">
-                            <div><strong>@run.RequestedAtUtc.ToLocalTime().ToString("u")</strong> (@GetLastSeenText(run.RequestedAtUtc))</div>
+                            <div><strong>@FormatTimestamp(run.RequestedAtUtc)</strong> (@GetLastSeenText(run.RequestedAtUtc))</div>
                             <div class="text-muted small">
                                 @run.RunSeconds s, allowed: @(run.Allowed ? "yes" : "no"), reason: @run.Reason
                             </div>
@@ -450,6 +556,25 @@
         }
 
         return $"{age.Days}d ago";
+    }
+
+    private static string FormatTimestamp(DateTimeOffset? when)
+    {
+        return when.HasValue
+            ? when.Value.ToLocalTime().ToString("ddd yyyy-MM-dd HH:mm:ss")
+            : "—";
+    }
+
+    private static string GetAlarmClass(string? severity)
+    {
+        return severity?.ToLowerInvariant() switch
+        {
+            "critical" => "bad",
+            "error" => "bad",
+            "warning" => "warn",
+            "info" => "ok",
+            _ => "unknown"
+        };
     }
 
     private bool ContainsAlarm(SystemAlarmUpdate update)

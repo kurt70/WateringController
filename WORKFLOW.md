@@ -1,6 +1,7 @@
 # Workflow
 
-> Status: Drafted by Codex. Boxes indicate what is done.
+> Shared progress checklist for validation and remaining setup work.
+> `README.md` is the canonical runtime/setup guide; this file tracks what has and has not been verified.
 
 ## Legend
 - [ ] Not done
@@ -30,15 +31,16 @@
 - [ ] Define grounding scheme (star ground, pump ground isolation).
 - [ ] Confirm enclosure, cable lengths, and environmental protection.
 
-## 2. Build & Run (Local Dev via Docker)
-- [x] docker compose up (infra/docker-compose.yml) for MQTT.
+## 2. Build & Run
+- [x] Start local infrastructure with `docker compose -f infra/docker-compose.yml up -d mqtt aspire-dashboard`.
 - [x] Verify backend health endpoint /health is OK.
-- [!] Open frontend at http://localhost:8080/ (app container is commented out; backend serves UI at http://localhost:5291/).
+- [x] Current checked-in dev flow uses backend-served UI at `http://localhost:5291/`.
+- [!] Optional app container path (`http://localhost:8080/`) remains disabled until the commented `app` service in `infra/docker-compose.yml` is enabled.
 - [x] Confirm backend can publish/subscribe to MQTT topics (test publish + latest cache).
 
 ## 3. MQTT Connectivity
 - [x] Confirm MQTT broker reachable from backend.
-- [!] Confirm topic prefix (Mqtt__TopicPrefix). Default is now `home/veranda`, producing `home/veranda/WateringController/...`.
+- [x] Confirm topic prefix documentation matches code. Default is `home/veranda`, producing `home/veranda/WateringController/...`.
 
 ## 4. Safety Gate Checks
 - [x] Publish water level below threshold -> pump blocked (verified 409 "Water level is empty.").
@@ -84,8 +86,9 @@
 - [x] Fix docs/mqtt.md code fences.
 - [x] Update docs/mqtt.md and WORKFLOW topic prefix to match code (topics are `{prefix}/WateringController/...`).
 - [x] Update README if dev steps or environment info changed.
-- [ ] Document test workflow updates (E2E + build-lock workaround).
+- [x] Document test workflow updates (E2E + build-lock workaround) in `README.md` and keep `SESSION_RESUME.md` as a short companion.
 
 ---
 ## Status Log
 - [x] Initial workflow drafted.
+- [x] Governance and shared squad-state documentation aligned for multi-machine use.

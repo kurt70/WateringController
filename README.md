@@ -1,15 +1,20 @@
 This repo hosts the Watering Controller system.
 
-Local dev (backend + frontend + MQTT + Aspire Dashboard via Docker Compose):
-1) Build and run:
-   `docker compose -f infra/docker-compose.yml up --build`
-2) Open the app: `http://localhost:8080/`
-3) MQTT broker: `localhost:1883`
-4) Aspire Dashboard: `http://localhost:18888/`
+Local infrastructure via Docker Compose (current checked-in compose file):
+1) Start MQTT + Aspire Dashboard:
+   `docker compose -f infra/docker-compose.yml up -d mqtt aspire-dashboard`
+2) MQTT broker: `localhost:1883`
+3) Aspire Dashboard: `http://localhost:18888/`
 
-Backend-only dev (serves frontend from backend):
-1) Run backend: `dotnet run --project src/backend/WateringController.Backend.csproj`
-2) Open the app: `http://localhost:5291/`
+Backend + frontend dev (backend serves the frontend):
+1) Run backend:
+   `dotnet run --project src/backend/WateringController.Backend.csproj`
+2) Open the app:
+   `http://localhost:5291/`
+
+Optional full app container:
+- `infra/docker-compose.yml` contains a commented `app` service.
+- If you enable that service, the app is exposed on `http://localhost:8080/`.
 
 Testing:
 - Backend unit tests:
@@ -29,6 +34,7 @@ Notes:
 - Electronics diagrams and wiring: `docs/electronics.md`
 - SQLite files are created in the backend working directory by default.
 - MQTT topic prefix is configurable via `Mqtt__TopicPrefix` (default `home/veranda`).
+- `.squad/` is shared repository state and should be committed when team rules, routing, decisions, or logs change. Only machine-local helpers should stay ignored.
 
 Configuration reference:
 - Mqtt: `Mqtt__Host`, `Mqtt__Port`, `Mqtt__UseTls`, `Mqtt__ClientId`, `Mqtt__Username`, `Mqtt__Password`, `Mqtt__KeepAliveSeconds`, `Mqtt__ReconnectSeconds`, `Mqtt__TopicPrefix`
