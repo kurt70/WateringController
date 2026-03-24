@@ -14,3 +14,4 @@
 - Blocker: compile-time errors in Home.razor; request frontend author to fix variable scoping or rename locals. Validation cannot proceed until build succeeds.
 
 2026-03-23T19:37:23 - Confirmed build & publish succeeded for src\frontend\WateringController.Frontend.csproj.
+2026-03-24T19:19:02.7970455+01:00 - r2-d2: Performed container validation: docker available; compose config valid; dotnet present. Did not run full docker build to avoid heavy network/CPU. See infra/docker-compose.yml for app service (commented).
