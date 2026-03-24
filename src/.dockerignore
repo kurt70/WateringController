@@ -1,0 +1,4 @@
+**/bin/
+**/obj/
+backend.tests/
+frontend.e2e/

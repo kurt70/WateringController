@@ -27,16 +27,20 @@ services:
   #     - "4317:4317"
   #     - "4318:4318"
 
-  # app:
-  #   build:
-  #     context: ..
-  #     dockerfile: src/Dockerfile
-  #   ports:
-  #     - "8080:8080"
-  #   environment:
-  #     - Mqtt__Host=mqtt
-  #     - Mqtt__Port=1883
-  #     - Mqtt__TopicPrefix=home/veranda
-  #     - WATERING_DB_PATH=/data/watering.db
-  #   volumes:
-  #     - ./data:/data
+  app:
+    profiles: ["app"]
+    image: ${CONTROLLER_IMAGE:-registry.monge.place/watering-controller}:${CONTROLLER_TAG:-latest}
+    build:
+      context: ../src
+      dockerfile: Dockerfile
+    depends_on:
+      - mqtt
+    ports:
+      - "8080:8080"
+    environment:
+      - Mqtt__Host=mqtt
+      - Mqtt__Port=1883
+      - Mqtt__TopicPrefix=home/veranda
+      - WATERING_DB_PATH=/data/watering.db
+    volumes:
+      - ./data:/data

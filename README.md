@@ -13,8 +13,25 @@ Backend + frontend dev (backend serves the frontend):
    `http://localhost:5291/`
 
 Optional full app container:
-- `infra/docker-compose.yml` contains a commented `app` service.
-- If you enable that service, the app is exposed on `http://localhost:8080/`.
+- The compose file includes an `app` profile-backed service.
+- Local run:
+  - `docker compose -f infra/docker-compose.yml --profile app up --build app`
+- The app is exposed on `http://localhost:8080/`.
+
+Container image build/push:
+1) Copy `infra/registry.local.env.example` to `infra/registry.local.env`.
+2) Set local values:
+   - `CONTROLLER_IMAGE` defaults to `registry.monge.place/watering-controller`
+   - `CONTROLLER_TAG` defaults to `latest`
+   - fill `REGISTRY_USERNAME` / `REGISTRY_PASSWORD` only when you plan to push
+3) Build locally:
+   - `.\tools\publish-controller-image.ps1`
+4) Build with a specific tag:
+   - `.\tools\publish-controller-image.ps1 -Tag 2026.03.24`
+5) Push to `registry.monge.place`:
+   - `.\tools\publish-controller-image.ps1 -Push`
+
+`infra\registry.local.env` is gitignored so local registry credentials stay out of the repo.
 
 Testing:
 - Backend unit tests:

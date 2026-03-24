@@ -9,3 +9,4 @@
 ## Learnings
 
 <!-- Append learnings below -->
+- 2026-03-24: For this repo's externally exposed single-container deployment, prefer front-door OIDC authentication at the reverse proxy over building local login into the app. Reason: the Blazor WASM UI, minimal APIs, and SignalR hub all live on the same origin and can be gated together cleanly. Key paths reviewed: `src\backend\Program.cs`, `src\backend\AppServiceRegistration.cs`, `src\frontend\Services\WateringHubClient.cs`, `infra\docker-compose.yml`, `src\Dockerfile`, `README.md`.

@@ -17,26 +17,26 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.9.0" />
   </ItemGroup>
 
-  <Target Name="PublishFrontend" BeforeTargets="CopyFrontendWwwroot">
+  <Target Name="PublishFrontend" BeforeTargets="CopyFrontendWwwroot" Condition="'$(SkipFrontendPublish)' != 'true'">
     <Exec
-      Command="dotnet publish ..\frontend\WateringController.Frontend.csproj -c $(Configuration)" />
+      Command="dotnet publish ../frontend/WateringController.Frontend.csproj -c $(Configuration)" />
   </Target>
 
-  <Target Name="CleanBackendWwwroot" BeforeTargets="CopyFrontendWwwroot">
+  <Target Name="CleanBackendWwwroot" BeforeTargets="CopyFrontendWwwroot" Condition="'$(SkipFrontendPublish)' != 'true'">
     <PropertyGroup>
-      <BackendWwwroot>$(MSBuildProjectDirectory)\wwwroot\</BackendWwwroot>
-      <BackendFramework>$(BackendWwwroot)_framework\</BackendFramework>
+      <BackendWwwroot>$(MSBuildProjectDirectory)/wwwroot/</BackendWwwroot>
+      <BackendFramework>$(BackendWwwroot)_framework/</BackendFramework>
     </PropertyGroup>
     <RemoveDir Directories="$(BackendFramework)" Condition="Exists('$(BackendFramework)')" />
     <Delete Files="$(BackendWwwroot)index.html;$(BackendWwwroot)index.html.br;$(BackendWwwroot)index.html.gz" />
   </Target>
 
-  <Target Name="CopyFrontendWwwroot" AfterTargets="Build">
+  <Target Name="CopyFrontendWwwroot" AfterTargets="Build" Condition="'$(SkipFrontendPublish)' != 'true'">
     <PropertyGroup>
-      <FrontendPublishWwwroot>$(MSBuildProjectDirectory)\..\frontend\bin\$(Configuration)\net10.0\publish\wwwroot\**\*</FrontendPublishWwwroot>
-      <BackendWwwroot>$(MSBuildProjectDirectory)\wwwroot\</BackendWwwroot>
+      <FrontendPublishWwwroot>$(MSBuildProjectDirectory)/../frontend/bin/$(Configuration)/net10.0/publish/wwwroot/**/*</FrontendPublishWwwroot>
+      <BackendWwwroot>$(MSBuildProjectDirectory)/wwwroot/</BackendWwwroot>
     </PropertyGroup>
-    <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\..\frontend\bin\$(Configuration)\net10.0\publish\wwwroot')">
+    <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)/../frontend/bin/$(Configuration)/net10.0/publish/wwwroot')">
       <FrontendPublishFiles Include="$(FrontendPublishWwwroot)" />
     </ItemGroup>
     <Copy

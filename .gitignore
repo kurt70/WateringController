@@ -250,6 +250,9 @@ _Pvt_Extensions
 # Firmware secrets
 infra/firmware/**/include/config.h
 
+# Local container registry credentials
+infra/*.local.env
+
 # Local runtime data
 src/backend/watering.dev.db
 
